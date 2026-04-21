@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────
+#  NextScene — Requirements
+#  Testado com Python 3.10+
+# ─────────────────────────────────────────────
+
+# === Data & ML Core ===
+numpy>=1.26.0, <2.0
+pandas>=2.1.0
+scikit-learn>=1.3.0
+scipy>=1.11.0
+
+# === Collaborative Filtering ===
+scikit-surprise>=1.1.3
+
+# === NLP / Feature Engineering ===
+nltk>=3.8.1
+
+# === Performance ===
+pyarrow>=14.0.0       # leitura/escrita Parquet (muito mais rápido que CSV)
+fastparquet>=2023.10.0
+
+# === Model Serialization ===
+joblib>=1.3.2
+
+# === API ===
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.0
+python-jose[cryptography]>=3.3.0   # JWT
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# === HTTP Client (TMDB API) ===
+httpx>=0.25.0
+python-dotenv>=1.0.0
+
+# === Visualization (notebooks) ===
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
+
+# === Notebooks ===
+jupyter>=1.0.0
+ipykernel>=6.26.0
+
+# === Testing ===
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.25.0          # test client para FastAPI
+
+# === Dev / Qualidade ===
+black>=23.10.0
+isort>=5.12.0
+flake8>=6.1.0

@@ -1,0 +1,21 @@
+.env
+
+venv/
+__pycache__/
+*.pyc
+
+# Dataset
+data/raw/
+models_saved/*.joblib
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Frontend
+node_modules/
+dist/
+.env.local
+
+#
+*.log
+.DS_Store
