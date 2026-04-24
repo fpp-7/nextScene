@@ -22,6 +22,7 @@ else:
 
 DATA_PROCESSED_PATH = ROOT_DIR / "data" / "processed"
 MODELS_PATH         = ROOT_DIR / "models_saved"
+DATA_RAW_PATH = MOVIELENS_PATH.parent  # aponta para data/raw/
 
 # Garante que os diretórios existam
 DATA_PROCESSED_PATH.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 
 from src.config import DATA_PROCESSED_PATH, MODELS_PATH
 from src.preprocessing.cleaner import load_movies, load_tags
+from src.preprocessing.tmdb_enricher import TMDB_METADATA_FILE # Import TMDB metadata file path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,19 +23,15 @@ logger = logging.getLogger(__name__)
 class FeatureBuilder:
     """
     Constrói e persiste a matriz de features content-based.
-
-    Features combinadas:
-      - TF-IDF das tags agregadas por filme       (peso: 0.45)
-      - One-Hot Encoding dos gêneros              (peso: 0.35)
-      - One-Hot Encoding da era cinematográfica   (peso: 0.20)
+    Combina: TF-IDF das tags (MovieLens + TMDB enrichment) + gêneros (one-hot).
     """
 
     def __init__(self):
-        self.tfidf        = TfidfVectorizer(max_features=500, stop_words="english")
-        self.mlb_genres   = MultiLabelBinarizer()
-        self.mlb_era      = MultiLabelBinarizer()
+        self.tfidf = TfidfVectorizer(max_features=500, stop_words="english")
+        self.mlb_genres = MultiLabelBinarizer()
         self.feature_matrix = None
-        self.movie_ids      = None
+        self.movie_ids = None
+        self.tmdb_used = False  # Track if TMDB enrichment was used
 
     # ─── Público ──────────────────────────────────────────────────────────────
 
@@ -51,23 +48,40 @@ class FeatureBuilder:
         tag_docs = self._aggregate_tags(movies, tags)
         movies["tag_doc"] = movies["movieId"].map(tag_docs).fillna("")
 
-        # 2. TF-IDF nas tags
-        logger.info("  → TF-IDF nas tags...")
-        tfidf_matrix = self.tfidf.fit_transform(movies["tag_doc"])
-        tfidf_matrix = tfidf_matrix * 0.45  # peso
+        # 2. Verifica e mescla metadados TMDB
+        if TMDB_METADATA_FILE.exists():
+            logger.info("  → Mesclando metadados TMDB...")
+            tmdb_df = pd.read_parquet(TMDB_METADATA_FILE)
+            # Ensure 'movieId' is of the same type for merging
+            movies['movieId'] = movies['movieId'].astype(tmdb_df['movieId'].dtype)
+            movies = pd.merge(movies, tmdb_df, on="movieId", how="left")
+            
+            # Combine tag_doc with TMDB keywords, director, cast
+            movies["enriched_text"] = movies.apply(
+                lambda row: f"{row['tag_doc']} {row['keywords']} {row['director']} {row['cast']}"
+                if pd.notna(row['keywords']) or pd.notna(row['director']) or pd.notna(row['cast'])
+                else row['tag_doc'], axis=1
+            )
+            movies["enriched_text"] = movies["enriched_text"].fillna("").str.strip()
+            self.tmdb_used = True
+            logger.info("  → TMDB enrichment ativo.")
+        else:
+            logger.warning("  → TMDB metadata file não encontrado. Usando apenas tags MovieLens para TF-IDF.")
+            movies["enriched_text"] = movies["tag_doc"]
+            self.tmdb_used = False
+        
+        # 3. TF-IDF nas tags enriquecidas
+        logger.info("  → TF-IDF nas tags (enriquecidas, se disponível)...")
+        tfidf_matrix = self.tfidf.fit_transform(movies["enriched_text"])
+        tfidf_matrix = tfidf_matrix * 0.55  # peso ajustado
 
-        # 3. One-Hot nos gêneros
+        # 4. One-Hot nos gêneros
         logger.info("  → One-Hot nos gêneros...")
         genres_matrix = self.mlb_genres.fit_transform(movies["genres_list"])
-        genres_matrix = csr_matrix(genres_matrix, dtype=np.float32) * 0.35
-
-        # 4. One-Hot na era
-        logger.info("  → One-Hot na era cinematográfica...")
-        era_matrix = self.mlb_era.fit_transform(movies["era"].apply(lambda x: [x]))
-        era_matrix = csr_matrix(era_matrix, dtype=np.float32) * 0.20
+        genres_matrix = csr_matrix(genres_matrix, dtype=np.float32) * 0.45  # peso ajustado
 
         # 5. Concatena tudo
-        self.feature_matrix = hstack([tfidf_matrix, genres_matrix, era_matrix])
+        self.feature_matrix = hstack([tfidf_matrix, genres_matrix])
         self.movie_ids       = movies["movieId"].values
 
         logger.info(f"Feature matrix shape: {self.feature_matrix.shape}")

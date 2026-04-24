@@ -5,7 +5,7 @@ __pycache__/
 *.pyc
 
 # Dataset
-data/raw/
+data/
 models_saved/*.joblib
 
 # Jupyter Notebooks
@@ -19,3 +19,4 @@ dist/
 #
 *.log
 .DS_Store
+
