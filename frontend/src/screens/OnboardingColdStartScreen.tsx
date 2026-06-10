@@ -8,6 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { MOVIES } from '../data/mock-data';
 import { RootStackParamList } from '../navigation/types';
+import { useAuth } from '../contexts/AuthContext';
+import { ratingService } from '../services/ratingService';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ColdStartRating } from '../types';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48 - 16) / 2;
@@ -15,10 +19,28 @@ const CARD_WIDTH = (width - 48 - 16) / 2;
 type Props = NativeStackScreenProps<RootStackParamList, 'OnboardingColdStart'>;
 
 export function OnboardingColdStartScreen({ navigation }: Props) {
+  const { completeOnboarding } = useAuth();
   const [ratings, setRatings] = useState<Record<number, 'like' | 'dislike' | 'seen'>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const setRating = (id: number, type: 'like' | 'dislike' | 'seen') => {
     setRatings((r) => ({ ...r, [id]: r[id] === type ? undefined! : type }));
+  };
+
+  const handleFinish = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload: ColdStartRating[] = Object.entries(ratings)
+        .filter(([_, type]) => type !== undefined)
+        .map(([id, type]) => ({ movieId: Number(id), type }));
+      
+      await ratingService.submitColdStart(payload);
+      await completeOnboarding(); // Triggers navigation to MainTabs
+    } catch (err) {
+      // could handle error
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -27,7 +49,7 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
         <View style={styles.header}>
           <Text style={styles.step}>Etapa 2 de 2</Text>
           <Text style={styles.title}>Avalie Filmes</Text>
-          <Text style={styles.desc}>Avalie alguns filmes para calibrar suas recomendacoes</Text>
+          <Text style={styles.desc}>Avalie alguns filmes para calibrar suas recomendações</Text>
         </View>
         <View style={styles.progressRow}>
           <View style={[styles.bar, { backgroundColor: colors.primary }]} />
@@ -67,8 +89,17 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
             ))}
           </View>
         </ScrollView>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('MainTabs')} activeOpacity={0.8}>
-          <Text style={styles.buttonText}>Comecar a Explorar</Text>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={handleFinish} 
+          disabled={isSubmitting}
+          activeOpacity={0.8}
+        >
+          {isSubmitting ? (
+            <LoadingSpinner size="small" />
+          ) : (
+            <Text style={styles.buttonText}>Começar a Explorar</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

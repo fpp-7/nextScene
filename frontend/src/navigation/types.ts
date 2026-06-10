@@ -5,6 +5,9 @@ export type RootStackParamList = {
   OnboardingColdStart: undefined;
   MainTabs: undefined;
   MovieDetails: { id: number };
+  EditProfile: undefined;
+  GenrePreferences: undefined;
+  Settings: undefined;
 };
 
 export type TabParamList = {

@@ -1,53 +1,134 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Sparkles, RefreshCw } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RefreshCw, Sparkles, Users } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
-import { MOVIES } from '../data/mock-data';
 import { MovieCard } from '../components/MovieCard';
-import { RootStackParamList } from '../navigation/types';
+import { RootStackParamList, TabParamList } from '../navigation/types';
+import { Movie } from '../types';
+import { movieService } from '../services/movieService';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ErrorMessage } from '../components/ErrorMessage';
 
-export function RecommendationsScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const aiPicks = [MOVIES[0], MOVIES[3], MOVIES[4], MOVIES[2]];
-  const similar = [MOVIES[5], MOVIES[7], MOVIES[6], MOVIES[8]];
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { CompositeScreenProps } from '@react-navigation/native';
+
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'Recommendations'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export function RecommendationsScreen({ navigation }: Props) {
+  const [aiPicks, setAiPicks] = useState<Movie[]>([]);
+  const [similarUsers, setSimilarUsers] = useState<Movie[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadRecommendations = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await movieService.getRecommendations();
+      setAiPicks(data.aiPicks);
+      setSimilarUsers(data.similarUsers);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao carregar recomendações');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRecommendations();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadRecommendations();
+    setRefreshing(false);
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Para Você</Text>
+        </View>
+        <LoadingSpinner />
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Para Você</Text>
+        </View>
+        <ErrorMessage message={error} onRetry={loadRecommendations} />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerLeft}>
-            <Sparkles size={20} color={colors.primary} />
-            <Text style={styles.headerTitle}>Para Voce</Text>
-          </View>
-          <TouchableOpacity style={styles.refreshBtn} activeOpacity={0.7}>
-            <RefreshCw size={16} color={colors.mutedForeground} />
+    <SafeAreaView style={styles.container}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Para Você</Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
+            <RefreshCw size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.matchBanner}>
-          <Text style={styles.matchTitle}>Baseado no seu perfil</Text>
-          <Text style={styles.matchDesc}>Usuarios com gostos parecidos adoraram estes filmes</Text>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.iconBox}>
+              <Sparkles size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.sectionTitle}>Escolhas da IA</Text>
+              <Text style={styles.sectionSubtitle}>Baseado no seu gosto</Text>
+            </View>
+          </View>
+          
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+            {aiPicks.map((movie) => (
+              <View key={movie.id} style={{ marginRight: 16 }}>
+                <MovieCard
+                  movie={movie}
+                  onPress={(id) => navigation.navigate('MovieDetails', { id })}
+                />
+              </View>
+            ))}
+          </ScrollView>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>IA Recomenda</Text>
-          <View style={styles.grid}>
-            {aiPicks.map((m) => (
-              <MovieCard key={m.id} movie={m} onPress={() => navigation.navigate('MovieDetails', { id: m.id })} />
-            ))}
+          <View style={styles.sectionHeader}>
+            <View style={styles.iconBox}>
+              <Users size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.sectionTitle}>Usuários Similares</Text>
+              <Text style={styles.sectionSubtitle}>O que pessoas como você estão assistindo</Text>
+            </View>
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Usuarios Parecidos Curtiram</Text>
-          <View style={styles.grid}>
-            {similar.map((m) => (
-              <MovieCard key={m.id} movie={m} onPress={() => navigation.navigate('MovieDetails', { id: m.id })} />
+          
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
+            {similarUsers.map((movie) => (
+              <View key={movie.id} style={{ marginRight: 16 }}>
+                <MovieCard
+                  movie={movie}
+                  onPress={(id) => navigation.navigate('MovieDetails', { id })}
+                />
+              </View>
             ))}
-          </View>
+          </ScrollView>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -56,15 +137,13 @@ export function RecommendationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingHorizontal: 24, paddingBottom: 100 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { color: colors.white, fontSize: 24, fontWeight: '500' },
-  refreshBtn: { padding: 8, backgroundColor: colors.secondary, borderRadius: 20 },
-  matchBanner: { borderWidth: 1, borderColor: 'rgba(212,160,23,0.2)', borderRadius: 14, padding: 16, marginBottom: 24, backgroundColor: 'rgba(212,160,23,0.05)' },
-  matchTitle: { color: colors.primary, fontSize: 14 },
-  matchDesc: { color: colors.mutedForeground, fontSize: 12, marginTop: 4 },
-  section: { marginBottom: 24 },
-  sectionTitle: { color: colors.white, fontSize: 18, fontWeight: '500', marginBottom: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, marginBottom: 24 },
+  title: { color: colors.white, fontSize: 32, fontWeight: '700' },
+  refreshBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(212,160,23,0.1)', justifyContent: 'center', alignItems: 'center' },
+  section: { marginBottom: 32 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, marginBottom: 16, gap: 12 },
+  iconBox: { width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(212,160,23,0.1)', justifyContent: 'center', alignItems: 'center' },
+  sectionTitle: { color: colors.white, fontSize: 20, fontWeight: '600' },
+  sectionSubtitle: { color: colors.mutedForeground, fontSize: 14 },
+  horizontalList: { paddingHorizontal: 24 },
 });

@@ -1,20 +1,10 @@
+import { Movie } from '../types';
+
 export const GENRES = [
   "Acao", "Aventura", "Animacao", "Comedia", "Crime", "Documentario",
   "Drama", "Fantasia", "Ficcao Cientifica", "Guerra", "Historia",
   "Horror", "Misterio", "Musical", "Romance", "Suspense", "Terror", "Western"
 ];
-
-export interface Movie {
-  id: number;
-  title: string;
-  year: number;
-  genre: string;
-  rating: number;
-  imdb: number;
-  poster: string;
-  synopsis: string;
-  cast: string[];
-}
 
 export const MOVIES: Movie[] = [
   { id: 1, title: "O Poderoso Chefao", year: 2022, genre: "Crime", rating: 9.2, imdb: 9.2, poster: "https://images.unsplash.com/photo-1580741569354-08feedd159f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400", synopsis: "Um imperio do crime, uma familia dividida. A saga epica dos Corleone continua.", cast: ["Marlon Brando", "Al Pacino", "James Caan"] },

@@ -12,12 +12,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { GENRES } from '../data/mock-data';
 import { RootStackParamList } from '../navigation/types';
+import { userService } from '../services/userService';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OnboardingGenres'>;
 
 export function OnboardingGenresScreen({ navigation }: Props) {
   const [liked, setLiked] = useState<string[]>([]);
   const [disliked, setDisliked] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggle = (genre: string, list: 'liked' | 'disliked') => {
     if (list === 'liked') {
@@ -35,13 +38,24 @@ export function OnboardingGenresScreen({ navigation }: Props) {
     return 'neutral';
   };
 
+  const handleContinue = async () => {
+    setIsSubmitting(true);
+    try {
+      await userService.updateGenres({ liked, disliked });
+      navigation.navigate('OnboardingColdStart');
+    } catch (err) {
+      // Could show error here
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.step}>Etapa 1 de 2</Text>
-          <Text style={styles.title}>Seus Generos</Text>
+          <Text style={styles.title}>Seus Gêneros</Text>
           <Text style={styles.description}>
             Toque uma vez para{' '}
             <Text style={{ color: colors.primary }}>curtir</Text>, duas vezes para{' '}
@@ -49,13 +63,11 @@ export function OnboardingGenresScreen({ navigation }: Props) {
           </Text>
         </View>
 
-        {/* Progress */}
         <View style={styles.progressRow}>
           <View style={[styles.progressBar, { backgroundColor: colors.primary }]} />
           <View style={[styles.progressBar, { backgroundColor: colors.secondary }]} />
         </View>
 
-        {/* Genre grid */}
         <ScrollView style={styles.genreScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.genreGrid}>
             {GENRES.map((genre) => {
@@ -92,14 +104,20 @@ export function OnboardingGenresScreen({ navigation }: Props) {
           </View>
         </ScrollView>
 
-        {/* CTA */}
         <TouchableOpacity
           style={styles.button}
-          onPress={() => navigation.navigate('OnboardingColdStart')}
+          onPress={handleContinue}
+          disabled={isSubmitting}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>Continuar</Text>
-          <ArrowRight size={20} color={colors.primaryForeground} />
+          {isSubmitting ? (
+            <LoadingSpinner size="small" />
+          ) : (
+            <>
+              <Text style={styles.buttonText}>Continuar</Text>
+              <ArrowRight size={20} color={colors.primaryForeground} />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -107,95 +125,22 @@ export function OnboardingGenresScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  header: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  step: {
-    color: colors.primary,
-    fontSize: 14,
-  },
-  title: {
-    color: colors.white,
-    fontSize: 24,
-    fontWeight: '500',
-  },
-  description: {
-    color: colors.mutedForeground,
-    fontSize: 14,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  progressBar: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-  },
-  genreScroll: {
-    flex: 1,
-  },
-  genreGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingBottom: 16,
-  },
-  genreChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.secondary,
-  },
-  genreChipLiked: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(212,160,23,0.2)',
-  },
-  genreChipDisliked: {
-    borderColor: 'rgba(239,68,68,0.5)',
-    backgroundColor: 'rgba(239,68,68,0.1)',
-  },
-  genreText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-  },
-  genreTextLiked: {
-    color: colors.primary,
-  },
-  genreTextDisliked: {
-    color: colors.red400,
-  },
-  button: {
-    flexDirection: 'row',
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  buttonText: {
-    color: colors.primaryForeground,
-    fontSize: 16,
-    fontWeight: '500',
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { flex: 1, paddingHorizontal: 24, paddingTop: 16 },
+  header: { gap: 8, marginBottom: 8 },
+  step: { color: colors.primary, fontSize: 14 },
+  title: { color: colors.white, fontSize: 24, fontWeight: '500' },
+  description: { color: colors.mutedForeground, fontSize: 14 },
+  progressRow: { flexDirection: 'row', gap: 8, marginBottom: 24, marginTop: 8 },
+  progressBar: { flex: 1, height: 4, borderRadius: 2 },
+  genreScroll: { flex: 1 },
+  genreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingBottom: 16 },
+  genreChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.secondary },
+  genreChipLiked: { borderColor: colors.primary, backgroundColor: 'rgba(212,160,23,0.2)' },
+  genreChipDisliked: { borderColor: 'rgba(239,68,68,0.5)', backgroundColor: 'rgba(239,68,68,0.1)' },
+  genreText: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
+  genreTextLiked: { color: colors.primary },
+  genreTextDisliked: { color: colors.red400 },
+  button: { flexDirection: 'row', backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 8, marginBottom: 16 },
+  buttonText: { color: colors.primaryForeground, fontSize: 16, fontWeight: '500' },
 });

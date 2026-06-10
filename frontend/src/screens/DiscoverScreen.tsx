@@ -1,101 +1,216 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Dimensions,
+  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
+  Dimensions, RefreshControl,
 } from 'react-native';
-import { Search, SlidersHorizontal } from 'lucide-react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Search, Play } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../theme/colors';
-import { MOVIES } from '../data/mock-data';
+import { GENRES } from '../data/mock-data';
 import { MovieCard } from '../components/MovieCard';
-import { RootStackParamList } from '../navigation/types';
+import { RootStackParamList, TabParamList } from '../navigation/types';
+import { Movie } from '../types';
+import { movieService } from '../services/movieService';
+import { LoadingSpinner } from '../components/LoadingSpinner';
+import { ErrorMessage } from '../components/ErrorMessage';
+import { ImageFallback } from '../components/ImageFallback';
 
-const FILTER_GENRES = ['Todos', 'Acao', 'Drama', 'Suspense', 'Ficcao Cientifica', 'Terror'];
+const { width } = Dimensions.get('window');
 
-export function DiscoverScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [activeGenre, setActiveGenre] = useState('Todos');
-  const featured = MOVIES[1];
-  const filtered = activeGenre === 'Todos' ? MOVIES : MOVIES.filter((m) => m.genre === activeGenre);
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { CompositeScreenProps } from '@react-navigation/native';
+
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, 'Discover'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
+
+export function DiscoverScreen({ navigation }: Props) {
+  const [selectedGenre, setSelectedGenre] = useState('Todos');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [featured, setFeatured] = useState<Movie | null>(null);
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const loadData = async (genre?: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [moviesRes, featuredRes] = await Promise.all([
+        movieService.getMovies(genre),
+        movieService.getFeaturedMovie()
+      ]);
+      setMovies(moviesRes);
+      if (!featured && !genre) {
+        setFeatured(featuredRes);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erro ao carregar dados');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData(selectedGenre === 'Todos' ? undefined : selectedGenre);
+  }, [selectedGenre]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData(selectedGenre === 'Todos' ? undefined : selectedGenre);
+    setRefreshing(false);
+  };
+
+  const handleSearch = (text: string) => {
+    setSearchQuery(text);
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    if (text.trim() === '') {
+      setIsSearching(false);
+      loadData(selectedGenre === 'Todos' ? undefined : selectedGenre);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimeout.current = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const results = await movieService.searchMovies(text);
+        setMovies(results);
+      } catch (err: any) {
+        setError(err.message || 'Erro na busca');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300);
+  };
 
   return (
-    <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Featured */}
-        <View style={styles.featured}>
-          <Image source={{ uri: featured.poster }} style={styles.featuredImage} />
-          <View style={styles.featuredOverlay} />
-          <View style={styles.featuredInfo}>
-            <View style={styles.genreBadge}>
-              <Text style={styles.genreBadgeText}>{featured.genre}</Text>
-            </View>
-            <Text style={styles.featuredTitle}>{featured.title}</Text>
-            <Text style={styles.featuredMeta}>IMDb {featured.imdb} · {featured.year}</Text>
-          </View>
-        </View>
-
-        {/* Search */}
-        <View style={styles.searchContainer}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Descobrir</Text>
           <View style={styles.searchBar}>
             <Search size={20} color={colors.mutedForeground} />
             <TextInput
-              placeholder="Buscar filmes..."
-              placeholderTextColor={colors.mutedForeground}
               style={styles.searchInput}
+              placeholder="Buscar filmes, séries..."
+              placeholderTextColor={colors.mutedForeground}
+              value={searchQuery}
+              onChangeText={handleSearch}
             />
-            <SlidersHorizontal size={20} color={colors.mutedForeground} />
           </View>
         </View>
 
-        {/* Genre filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
-          {FILTER_GENRES.map((g) => (
-            <TouchableOpacity
-              key={g}
-              onPress={() => setActiveGenre(g)}
-              style={[styles.filterChip, activeGenre === g && styles.filterChipActive]}
-              activeOpacity={0.7}
+        {!isSearching && featured && (
+          <View style={styles.featuredSection}>
+            <TouchableOpacity 
+              activeOpacity={0.9} 
+              onPress={() => navigation.navigate('MovieDetails', { id: featured.id })}
             >
-              <Text style={[styles.filterText, activeGenre === g && styles.filterTextActive]}>{g}</Text>
+              <View style={styles.featuredImageContainer}>
+                <ImageFallback source={{ uri: featured.poster }} style={styles.featuredImage} />
+                <View style={styles.featuredOverlay} />
+                <View style={styles.featuredContent}>
+                  <Text style={styles.featuredTag}>Destaque da Semana</Text>
+                  <Text style={styles.featuredTitle}>{featured.title}</Text>
+                  <View style={styles.featuredActions}>
+                    <TouchableOpacity style={styles.playButton}>
+                      <Play size={20} color={colors.primaryForeground} fill={colors.primaryForeground} />
+                      <Text style={styles.playText}>Assistir Trailer</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Movies */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Aclamados pela Critica</Text>
-          <View style={styles.grid}>
-            {filtered.map((movie) => (
-              <MovieCard key={movie.id} movie={movie} onPress={() => navigation.navigate('MovieDetails', { id: movie.id })} />
-            ))}
           </View>
+        )}
+
+        {!isSearching && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.genresContainer}
+          >
+            {['Todos', ...GENRES].map((genre) => (
+              <TouchableOpacity
+                key={genre}
+                style={[styles.genreChip, selectedGenre === genre && styles.genreChipActive]}
+                onPress={() => setSelectedGenre(genre)}
+              >
+                <Text style={[styles.genreText, selectedGenre === genre && styles.genreTextActive]}>
+                  {genre}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        <View style={styles.moviesSection}>
+          <Text style={styles.sectionTitle}>
+            {isSearching ? 'Resultados da Busca' : selectedGenre === 'Todos' ? 'Em Alta' : selectedGenre}
+          </Text>
+          
+          {isLoading ? (
+            <LoadingSpinner />
+          ) : error ? (
+            <ErrorMessage message={error} onRetry={() => loadData(selectedGenre === 'Todos' ? undefined : selectedGenre)} />
+          ) : movies.length === 0 ? (
+            <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 20 }}>
+              Nenhum filme encontrado.
+            </Text>
+          ) : (
+            <View style={styles.grid}>
+              {movies.map((movie) => (
+                <MovieCard
+                  key={movie.id}
+                  movie={movie}
+                  onPress={(id) => navigation.navigate('MovieDetails', { id })}
+                />
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  featured: { height: 288, position: 'relative' },
+  scrollContent: { paddingBottom: 24 },
+  header: { paddingHorizontal: 24, paddingTop: 16, marginBottom: 24 },
+  title: { color: colors.white, fontSize: 32, fontWeight: '700', marginBottom: 16 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBackground, borderRadius: 14, paddingHorizontal: 16, height: 50, gap: 12 },
+  searchInput: { flex: 1, color: colors.white, fontSize: 16 },
+  featuredSection: { paddingHorizontal: 24, marginBottom: 24 },
+  featuredImageContainer: { width: '100%', height: width * 1.1, borderRadius: 24, overflow: 'hidden' },
   featuredImage: { width: '100%', height: '100%' },
-  featuredOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(10,10,10,0.4)' },
-  featuredInfo: { position: 'absolute', bottom: 24, left: 24, right: 24 },
-  genreBadge: { backgroundColor: 'rgba(212,160,23,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' },
-  genreBadgeText: { color: colors.primary, fontSize: 12 },
-  featuredTitle: { color: colors.white, fontSize: 20, fontWeight: '500', marginTop: 8 },
-  featuredMeta: { color: colors.mutedForeground, fontSize: 14, marginTop: 4 },
-  searchContainer: { paddingHorizontal: 24, marginTop: 16 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.secondary, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14 },
-  searchInput: { flex: 1, color: colors.white, fontSize: 14 },
-  filterScroll: { marginTop: 16 },
-  filterContent: { paddingHorizontal: 24, gap: 8 },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.secondary },
-  filterChipActive: { backgroundColor: colors.primary },
-  filterText: { color: colors.mutedForeground, fontSize: 14 },
-  filterTextActive: { color: colors.primaryForeground },
-  section: { paddingHorizontal: 24, marginTop: 24, paddingBottom: 100 },
-  sectionTitle: { color: colors.white, fontSize: 18, fontWeight: '500', marginBottom: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  featuredOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  featuredContent: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24 },
+  featuredTag: { color: colors.primary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  featuredTitle: { color: colors.white, fontSize: 32, fontWeight: '700', marginBottom: 16 },
+  featuredActions: { flexDirection: 'row', gap: 12 },
+  playButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, gap: 8 },
+  playText: { color: colors.primaryForeground, fontSize: 16, fontWeight: '600' },
+  genresContainer: { paddingHorizontal: 24, marginBottom: 24, gap: 8 },
+  genreChip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.secondary },
+  genreChipActive: { backgroundColor: colors.primary },
+  genreText: { color: colors.mutedForeground, fontSize: 14, fontWeight: '500' },
+  genreTextActive: { color: colors.primaryForeground, fontWeight: '600' },
+  moviesSection: { paddingHorizontal: 24 },
+  sectionTitle: { color: colors.white, fontSize: 20, fontWeight: '600', marginBottom: 16 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
 });
