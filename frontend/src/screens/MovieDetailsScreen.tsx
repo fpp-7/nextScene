@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Linking, Platform } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ArrowLeft, Star, Clock, Calendar, Bookmark, ThumbsUp, ThumbsDown, Play } from 'lucide-react-native';
+import { ArrowLeft, Star, Calendar, Bookmark, ThumbsUp, ThumbsDown, Play } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { RootStackParamList } from '../navigation/types';
@@ -34,11 +34,25 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await movieService.getMovieById(id);
-      if (!data) throw new Error('Filme não encontrado');
-      setMovie(data);
+      const movieData = await movieService.getMovieById(id);
+      if (!movieData) throw new Error('Filme não encontrado');
+      setMovie(movieData);
+
+      // Fetch user ratings resiliently
+      try {
+        const ratingsData = await ratingService.getMyRatings();
+        const userRating = ratingsData?.find((r) => r.movieId === id);
+        if (userRating) {
+          setRating(userRating.type === 'like' || userRating.type === 'dislike' ? userRating.type : null);
+        } else {
+          setRating(null);
+        }
+      } catch (ratingErr) {
+        // Fallback silently if ratings call fails (e.g. token expired)
+        setRating(null);
+      }
     } catch (err: any) {
-      setError(err.message || 'Erro ao carregar filme');
+      setError(err.response?.data?.error || err.message || 'Erro ao carregar filme');
     } finally {
       setIsLoading(false);
     }
@@ -62,14 +76,15 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
     setIsRating(true);
     try {
       if (rating === type) {
-        // undo rating not fully supported in mock, just visual
+        // undo rating - call DELETE on backend
+        await ratingService.deleteRating(id);
         setRating(null);
       } else {
         await ratingService.rateMovie(id, type);
         setRating(type);
       }
     } catch (err) {
-      // handle error
+      // handle error silently
     } finally {
       setIsRating(false);
     }
@@ -113,7 +128,16 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
           </SafeAreaView>
 
           <View style={styles.playButtonContainer}>
-            <TouchableOpacity style={styles.playButton} activeOpacity={0.8}>
+            <TouchableOpacity 
+              style={styles.playButton} 
+              activeOpacity={0.8}
+              onPress={() => {
+                if (movie) {
+                  const query = encodeURIComponent(movie.title + ' trailer');
+                  Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
+                }
+              }}
+            >
               <Play size={32} color={colors.primaryForeground} fill={colors.primaryForeground} style={{ marginLeft: 4 }} />
             </TouchableOpacity>
           </View>
@@ -122,20 +146,15 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
         <View style={styles.content}>
           <Text style={styles.title}>{movie.title}</Text>
           
-          <View style={styles.metadataRow}>
+            <View style={styles.metadataRow}>
             <View style={styles.metadataItem}>
               <Star size={16} color={colors.primary} fill={colors.primary} />
-              <Text style={styles.metadataText}>{movie.rating}</Text>
+              <Text style={styles.metadataText}>{movie.rating.toFixed(1)}</Text>
             </View>
             <View style={styles.metadataDot} />
             <View style={styles.metadataItem}>
               <Calendar size={16} color={colors.mutedForeground} />
               <Text style={styles.metadataText}>{movie.year}</Text>
-            </View>
-            <View style={styles.metadataDot} />
-            <View style={styles.metadataItem}>
-              <Clock size={16} color={colors.mutedForeground} />
-              <Text style={styles.metadataText}>2h 15m</Text>
             </View>
           </View>
 
@@ -195,7 +214,7 @@ const styles = StyleSheet.create({
   heroSection: { width: '100%', height: width * 1.2, position: 'relative' },
   poster: { width: '100%', height: '100%' },
   heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  headerAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 16, zIndex: 10 },
+  headerAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: Platform.OS === 'ios' ? 32 : 16, zIndex: 10 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   bookmarkButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   playButtonContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },

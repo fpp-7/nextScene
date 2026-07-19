@@ -2,7 +2,7 @@ import { apiClient } from './api';
 import { Movie } from '../types';
 import { MOVIES } from '../data/mock-data';
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 export const movieService = {
   async getMovies(genre?: string): Promise<Movie[]> {

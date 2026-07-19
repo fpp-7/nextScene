@@ -42,7 +42,8 @@ export function LoginScreen({ navigation }: Props) {
       await login(email, password);
       // Navigation is handled by AuthContext state changes
     } catch (err: any) {
-      setGeneralError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro ao fazer login. Verifique suas credenciais.';
+      setGeneralError(errorMsg);
     } finally {
       setIsSubmitting(false);
     }

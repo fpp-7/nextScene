@@ -1,8 +1,8 @@
 package io.nextscene.backend.model;
 
-
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -12,11 +12,13 @@ import java.util.UUID;
 @Entity
 @Getter
 @Setter
-@Table (name = "watch_list")
+@NoArgsConstructor
+@Table(name = "watch_list",
+       uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "movie_id"}))
 public class WatchList {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)

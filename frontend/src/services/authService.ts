@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 import { AuthResponse, LoginRequest, RegisterRequest } from '../types';
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 const mockUser = {
   id: 1,

@@ -1,0 +1,13 @@
+-- V2: Seed movies from frontend mock-data
+-- ==========================================
+
+INSERT INTO movie (movie_id, title, genres, year, poster_url, synopsis, cast_list, rating) VALUES
+(1, 'O Poderoso Chefao', 'Crime', 2022, 'https://images.unsplash.com/photo-1580741569354-08feedd159f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Um imperio do crime, uma familia dividida. A saga epica dos Corleone continua.', 'Marlon Brando,Al Pacino,James Caan', 9.2),
+(2, 'Interestelar', 'Ficcao Cientifica', 2014, 'https://images.unsplash.com/photo-1653045474061-075ba29db54f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Uma jornada atraves do espaco-tempo para salvar a humanidade da extincao.', 'Matthew McConaughey,Anne Hathaway,Jessica Chastain', 8.7),
+(3, 'Clube da Luta', 'Drama', 1999, 'https://images.unsplash.com/photo-1762115445557-967c1504ffe9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Um homem insatisfeito encontra libertacao atraves da violencia e do caos.', 'Brad Pitt,Edward Norton,Helena Bonham Carter', 8.8),
+(4, 'A Origem', 'Suspense', 2010, 'https://images.unsplash.com/photo-1550556808-ec6ada57caff?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Um ladrao especializado em extrair segredos do subconsciente durante o sonho.', 'Leonardo DiCaprio,Joseph Gordon-Levitt,Elliot Page', 8.8),
+(5, 'Matrix', 'Acao', 1999, 'https://images.unsplash.com/photo-1653849532026-745a05f0b882?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'A realidade e uma simulacao. Neo precisa decidir entre a pilula azul e a vermelha.', 'Keanu Reeves,Laurence Fishburne,Carrie-Anne Moss', 8.7),
+(6, 'O Iluminado', 'Terror', 1980, 'https://images.unsplash.com/photo-1760577315790-3a0ed3f42496?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Um escritor e sua familia ficam isolados em um hotel assombrado durante o inverno.', 'Jack Nicholson,Shelley Duvall,Danny Lloyd', 8.4),
+(7, 'Orgulho e Preconceito', 'Romance', 2005, 'https://images.unsplash.com/photo-1627964464837-6328f5931576?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Uma historia de amor atemporal entre Elizabeth Bennet e Mr. Darcy.', 'Keira Knightley,Matthew Macfadyen,Judi Dench', 7.8),
+(8, 'Indiana Jones', 'Aventura', 1981, 'https://images.unsplash.com/photo-1758523957586-0e9592d880f9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Um arqueologo aventureiro busca reliquias antigas pelo mundo.', 'Harrison Ford,Karen Allen,Paul Freeman', 8.4),
+(9, 'Planeta Terra', 'Documentario', 2006, 'https://images.unsplash.com/photo-1759521528494-fd6ceb6049e3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400', 'Uma jornada visual impressionante pela diversidade natural do nosso planeta.', 'David Attenborough', 9.4);

@@ -46,7 +46,8 @@ export function RegisterScreen({ navigation }: Props) {
       await register(name, email, password);
       // AuthContext will handle navigation
     } catch (err: any) {
-      setGeneralError(err.message || 'Erro ao criar conta. Tente novamente.');
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro ao criar conta. Tente novamente.';
+      setGeneralError(errorMsg);
     } finally {
       setIsSubmitting(false);
     }

@@ -2,7 +2,7 @@ import { apiClient } from './api';
 import { Movie, WatchlistItem } from '../types';
 import { MOVIES } from '../data/mock-data';
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 let mockWatchlist: number[] = [1, 3, 5, 8]; // IDs of movies in watchlist
 
@@ -34,7 +34,4 @@ export const watchlistService = {
     await apiClient.delete(`/watchlist/${movieId}`);
   },
 
-  isInWatchlistSync(movieId: number): boolean {
-    return mockWatchlist.includes(movieId);
-  },
 };

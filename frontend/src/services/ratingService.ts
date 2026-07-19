@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 import { RatingEntry, ColdStartRating } from '../types';
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 export const ratingService = {
   async rateMovie(movieId: number, type: 'like' | 'dislike' | 'seen'): Promise<RatingEntry> {
@@ -28,5 +28,13 @@ export const ratingService = {
       return;
     }
     await apiClient.post('/recommendations/cold-start', { ratings });
+  },
+
+  async deleteRating(movieId: number): Promise<void> {
+    if (USE_MOCK) {
+      await new Promise((r) => setTimeout(r, 300));
+      return;
+    }
+    await apiClient.delete(`/ratings/${movieId}`);
   },
 };

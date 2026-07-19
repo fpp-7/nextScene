@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Dimensions,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Dimensions, Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star, ThumbsUp, ThumbsDown, Check } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
-import { MOVIES } from '../data/mock-data';
 import { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../contexts/AuthContext';
 import { ratingService } from '../services/ratingService';
+import { movieService } from '../services/movieService';
 import { LoadingSpinner } from '../components/LoadingSpinner';
-import { ColdStartRating } from '../types';
+import { ColdStartRating, Movie } from '../types';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48 - 16) / 2;
@@ -22,6 +22,22 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
   const { completeOnboarding } = useAuth();
   const [ratings, setRatings] = useState<Record<number, 'like' | 'dislike' | 'seen'>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [isLoadingMovies, setIsLoadingMovies] = useState(true);
+
+  useEffect(() => {
+    async function fetchMovies() {
+      try {
+        const data = await movieService.getMovies();
+        setMovies(data);
+      } catch (err) {
+        console.error('Error fetching onboarding movies:', err);
+      } finally {
+        setIsLoadingMovies(false);
+      }
+    }
+    fetchMovies();
+  }, []);
 
   const setRating = (id: number, type: 'like' | 'dislike' | 'seen') => {
     setRatings((r) => ({ ...r, [id]: r[id] === type ? undefined! : type }));
@@ -36,8 +52,9 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
       
       await ratingService.submitColdStart(payload);
       await completeOnboarding(); // Triggers navigation to MainTabs
-    } catch (err) {
-      // could handle error
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Erro ao enviar avaliações iniciais.';
+      Alert.alert('Erro', errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -55,40 +72,46 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
           <View style={[styles.bar, { backgroundColor: colors.primary }]} />
           <View style={[styles.bar, { backgroundColor: colors.primary }]} />
         </View>
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          <View style={styles.grid}>
-            {MOVIES.slice(0, 8).map((movie) => (
-              <View key={movie.id} style={styles.movieItem}>
-                <View style={styles.posterWrap}>
-                  <Image source={{ uri: movie.poster }} style={styles.poster} />
-                  <View style={styles.posterInfo}>
-                    <Text style={styles.posterTitle} numberOfLines={1}>{movie.title}</Text>
-                    <View style={styles.ratingRow}>
-                      <Star size={12} color={colors.primary} fill={colors.primary} />
-                      <Text style={styles.ratingText}>{movie.rating}</Text>
+        {isLoadingMovies ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <LoadingSpinner size="large" />
+          </View>
+        ) : (
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+            <View style={styles.grid}>
+              {movies.slice(0, 8).map((movie) => (
+                <View key={movie.id} style={styles.movieItem}>
+                  <View style={styles.posterWrap}>
+                    <Image source={{ uri: movie.poster }} style={styles.poster} />
+                    <View style={styles.posterInfo}>
+                      <Text style={styles.posterTitle} numberOfLines={1}>{movie.title}</Text>
+                      <View style={styles.ratingRow}>
+                        <Star size={12} color={colors.primary} fill={colors.primary} />
+                        <Text style={styles.ratingText}>{movie.rating}</Text>
+                      </View>
                     </View>
                   </View>
+                  <View style={styles.actionsRow}>
+                    {(['like', 'dislike', 'seen'] as const).map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        onPress={() => setRating(movie.id, type)}
+                        style={[styles.actionBtn, ratings[movie.id] === type && (
+                          type === 'like' ? styles.liked : type === 'dislike' ? styles.disliked : styles.seen
+                        )]}
+                        activeOpacity={0.7}
+                      >
+                        {type === 'like' && <ThumbsUp size={16} color={ratings[movie.id] === 'like' ? colors.primary : colors.mutedForeground} />}
+                        {type === 'dislike' && <ThumbsDown size={16} color={ratings[movie.id] === 'dislike' ? colors.red400 : colors.mutedForeground} />}
+                        {type === 'seen' && <Check size={16} color={ratings[movie.id] === 'seen' ? colors.white : colors.mutedForeground} />}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-                <View style={styles.actionsRow}>
-                  {(['like', 'dislike', 'seen'] as const).map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      onPress={() => setRating(movie.id, type)}
-                      style={[styles.actionBtn, ratings[movie.id] === type && (
-                        type === 'like' ? styles.liked : type === 'dislike' ? styles.disliked : styles.seen
-                      )]}
-                      activeOpacity={0.7}
-                    >
-                      {type === 'like' && <ThumbsUp size={16} color={ratings[movie.id] === 'like' ? colors.primary : colors.mutedForeground} />}
-                      {type === 'dislike' && <ThumbsDown size={16} color={ratings[movie.id] === 'dislike' ? colors.red400 : colors.mutedForeground} />}
-                      {type === 'seen' && <Check size={16} color={ratings[movie.id] === 'seen' ? colors.white : colors.mutedForeground} />}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
+              ))}
+            </View>
+          </ScrollView>
+        )}
         <TouchableOpacity 
           style={styles.button} 
           onPress={handleFinish} 

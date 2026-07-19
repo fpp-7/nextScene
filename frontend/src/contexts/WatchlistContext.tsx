@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { Movie } from '../types';
 import { watchlistService } from '../services/watchlistService';
+import { useAuth } from './AuthContext';
 
 interface WatchlistState {
   items: Movie[];
@@ -56,6 +57,7 @@ function watchlistReducer(state: WatchlistState, action: WatchlistAction): Watch
 
 export function WatchlistProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(watchlistReducer, initialState);
+  const { isAuthenticated } = useAuth();
 
   const refreshWatchlist = useCallback(async () => {
     try {
@@ -68,8 +70,12 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshWatchlist();
-  }, [refreshWatchlist]);
+    if (isAuthenticated) {
+      refreshWatchlist();
+    } else {
+      dispatch({ type: 'SET_ITEMS', payload: [] });
+    }
+  }, [isAuthenticated, refreshWatchlist]);
 
   const addToWatchlist = async (movie: Movie) => {
     dispatch({ type: 'ADD_ITEM', payload: movie });

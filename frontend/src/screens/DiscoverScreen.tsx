@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
-  Dimensions, RefreshControl,
+  Dimensions, RefreshControl, Linking,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Search, Play } from 'lucide-react-native';
@@ -44,20 +44,27 @@ export function DiscoverScreen({ navigation }: Props) {
     setIsLoading(true);
     setError(null);
     try {
-      const [moviesRes, featuredRes] = await Promise.all([
-        movieService.getMovies(genre),
-        movieService.getFeaturedMovie()
-      ]);
+      const moviesRes = await movieService.getMovies(genre);
       setMovies(moviesRes);
-      if (!featured && !genre) {
-        setFeatured(featuredRes);
-      }
     } catch (err: any) {
-      setError(err.message || 'Erro ao carregar dados');
+      setError(err.response?.data?.error || err.message || 'Erro ao carregar dados');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Load featured movie only once on mount
+  useEffect(() => {
+    const loadFeatured = async () => {
+      try {
+        const featuredRes = await movieService.getFeaturedMovie();
+        setFeatured(featuredRes);
+      } catch {
+        // Featured is optional, no need to block UI
+      }
+    };
+    loadFeatured();
+  }, []);
 
   useEffect(() => {
     loadData(selectedGenre === 'Todos' ? undefined : selectedGenre);
@@ -127,7 +134,13 @@ export function DiscoverScreen({ navigation }: Props) {
                   <Text style={styles.featuredTag}>Destaque da Semana</Text>
                   <Text style={styles.featuredTitle}>{featured.title}</Text>
                   <View style={styles.featuredActions}>
-                    <TouchableOpacity style={styles.playButton}>
+                    <TouchableOpacity 
+                      style={styles.playButton}
+                      onPress={() => {
+                        const query = encodeURIComponent(featured.title + ' trailer');
+                        Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
+                      }}
+                    >
                       <Play size={20} color={colors.primaryForeground} fill={colors.primaryForeground} />
                       <Text style={styles.playText}>Assistir Trailer</Text>
                     </TouchableOpacity>

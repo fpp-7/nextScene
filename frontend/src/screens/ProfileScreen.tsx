@@ -28,8 +28,8 @@ export function ProfileScreen({ navigation }: Props) {
       try {
         const data = await userService.getStats();
         setStats(data);
-      } catch (err) {
-        // ignore
+      } catch (err: any) {
+        console.error('Erro ao carregar estatísticas do perfil:', err);
       } finally {
         setIsLoading(false);
       }

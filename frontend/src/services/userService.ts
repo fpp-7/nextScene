@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 import { User, UserStats, GenrePreference } from '../types';
 
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 export const userService = {
   async getProfile(): Promise<User> {

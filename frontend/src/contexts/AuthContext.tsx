@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userData = await SecureStore.getItemAsync(USER_KEY);
         const onboardingDone = await SecureStore.getItemAsync(ONBOARDING_KEY);
 
-        if (token && userData) {
+        if (token && userData && !token.startsWith('mock-')) {
           const user = JSON.parse(userData);
           setAuthToken(token);
           dispatch({
@@ -93,6 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             payload: { user, token, hasCompletedOnboarding: onboardingDone === 'true' },
           });
         } else {
+          await SecureStore.deleteItemAsync(TOKEN_KEY);
+          await SecureStore.deleteItemAsync(USER_KEY);
+          await SecureStore.deleteItemAsync(ONBOARDING_KEY);
           dispatch({ type: 'SET_LOADING', payload: false });
         }
       } catch {

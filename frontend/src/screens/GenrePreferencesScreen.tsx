@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowLeft, Heart, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,9 +17,18 @@ export function GenrePreferencesScreen({ navigation }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
-  // No mock load in mock data yet, starting fresh or assuming empty
   useEffect(() => {
-    // In a real app we'd get existing prefs from user data
+    const loadPrefs = async () => {
+      try {
+        const profile = await userService.getProfile();
+        if (profile.genresPreference) {
+          setLiked(profile.genresPreference);
+        }
+      } catch (err: any) {
+        // Silently catch or handle error log
+      }
+    };
+    loadPrefs();
   }, []);
 
   const toggle = (genre: string, list: 'liked' | 'disliked') => {
@@ -44,8 +53,9 @@ export function GenrePreferencesScreen({ navigation }: Props) {
       await userService.updateGenres({ liked, disliked });
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2000);
-    } catch (e) {
-      // handle error
+    } catch (e: any) {
+      const errorMsg = e.response?.data?.error || e.message || 'Não foi possível salvar as preferências.';
+      Alert.alert('Erro', errorMsg);
     } finally {
       setIsSaving(false);
     }

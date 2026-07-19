@@ -1,14 +1,55 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Switch } from 'react-native';
 import { ArrowLeft, Info, Trash2, Moon } from 'lucide-react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
 import { colors } from '../theme/colors';
 import { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen({ navigation }: Props) {
+  const [darkMode, setDarkMode] = useState(true); // App is dark-mode only for now
+
+  const handleClearCache = () => {
+    Alert.alert(
+      'Limpar Cache',
+      'Tem certeza que deseja limpar o cache do aplicativo? Você precisará fazer login novamente.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await SecureStore.deleteItemAsync('nextscene_auth_token');
+              await SecureStore.deleteItemAsync('nextscene_user_data');
+              await SecureStore.deleteItemAsync('nextscene_onboarding_complete');
+              Alert.alert('Sucesso', 'Cache limpo com sucesso. Reinicie o aplicativo.');
+            } catch {
+              Alert.alert('Erro', 'Não foi possível limpar o cache.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleAbout = () => {
+    Alert.alert(
+      'Sobre o NextScene',
+      'NextScene v1.0.0\n\nSistema inteligente de recomendação de filmes com IA.\n\nDesenvolvido como projeto acadêmico.\n\n© 2026 NextScene',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleToggleDarkMode = () => {
+    if (darkMode) {
+      Alert.alert('Tema Escuro', 'O tema claro ainda não está disponível. O aplicativo utiliza tema escuro por padrão.');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -20,12 +61,17 @@ export function SettingsScreen({ navigation }: Props) {
       <ScrollView style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Aplicativo</Text>
-          <TouchableOpacity style={styles.item} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.item} activeOpacity={0.7} onPress={handleToggleDarkMode}>
             <Moon size={20} color={colors.mutedForeground} />
             <Text style={styles.itemText}>Tema Escuro</Text>
-            <Text style={styles.itemValue}>Ativado</Text>
+            <Switch
+              value={darkMode}
+              onValueChange={handleToggleDarkMode}
+              trackColor={{ false: colors.secondary, true: colors.primary }}
+              thumbColor={colors.white}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.item} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.item} activeOpacity={0.7} onPress={handleClearCache}>
             <Trash2 size={20} color={colors.red400} />
             <Text style={[styles.itemText, { color: colors.red400 }]}>Limpar Cache</Text>
           </TouchableOpacity>
@@ -33,7 +79,7 @@ export function SettingsScreen({ navigation }: Props) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sobre</Text>
-          <TouchableOpacity style={styles.item} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.item} activeOpacity={0.7} onPress={handleAbout}>
             <Info size={20} color={colors.mutedForeground} />
             <Text style={styles.itemText}>Sobre o NextScene</Text>
           </TouchableOpacity>

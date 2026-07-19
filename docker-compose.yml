@@ -1,0 +1,71 @@
+# ──────────────────────────────────────────────────
+#  NextScene — Docker Compose
+# ──────────────────────────────────────────────────
+
+services:
+
+  # ─── PostgreSQL ────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: nextscene-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nextscene}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nextscene}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Recommendation Engine (FastAPI) ──────────
+  recommendation-engine:
+    build:
+      context: ./recommendation-engine
+      dockerfile: Dockerfile
+    container_name: nextscene-engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      ENV: development
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─── Backend (Spring Boot) ────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nextscene-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-nextscene}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-nextscene-super-secret-key-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1800000}
+      RECOMMENDATION_ENGINE_URL: http://recommendation-engine:8000
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      recommendation-engine:
+        condition: service_healthy
+
+volumes:
+  pgdata:
