@@ -8,16 +8,37 @@
 O diagnóstico abaixo foi escrito antes das correções e está preservado como
 registro. Todos os itens do plano da §6 foram implementados.
 
-**Cobertura de testes: 108 testes, todos passando.**
+**Cobertura de testes: 111 testes, todos passando.**
 
 | Projeto | Testes | Como rodar |
 |---|---|---|
-| Backend | 65 (integração com Postgres real via Testcontainers) | `cd backend && ./mvnw verify` |
+| Backend | 68 (integração com Postgres real via Testcontainers) | `cd backend && ./mvnw verify` |
 | Engine | 31 (pytest) | `cd recommendation-engine && python -m pytest tests/ -q` |
 | Frontend | 12 (jest) + checagem de tipos | `cd frontend && npm test && npm run typecheck` |
 
 CI em `.github/workflows/ci.yml`, com um job dedicado a impedir que segredos
 voltem a ser versionados.
+
+### Validação de ponta a ponta
+
+A pilha foi executada com `docker compose up` e um fluxo real percorrido:
+cadastro → catálogo paginado → busca → onboarding com avaliações em lote →
+watchlist → recomendações. 13 verificações, todas passando.
+
+O contrato entre backend e motor foi confirmado nos logs dos dois lados: o
+engine registrou `POST /api/v1/recommend/history 200 OK` interpretando
+`4 avaliações (2 curtidas, 1 rejeitadas)`, e o backend não registrou nenhuma
+queda para o fallback. O job do TMDB enriqueceu os primeiros lotes de filmes.
+
+Subir a pilha revelou dois defeitos que nenhum teste pegava, ambos corrigidos:
+
+- **`/actuator/health` não existia.** O endpoint estava configurado no
+  `application.yml` e usado como healthcheck do compose, mas a dependência
+  `spring-boot-starter-actuator` nunca foi declarada. O container ficava
+  permanentemente "unhealthy".
+- **Rota inexistente virava 500.** O handler genérico capturava
+  `NoResourceFoundException` e a transformava em erro interno, escondendo URLs
+  erradas — foi o que mascarou o problema acima.
 
 ### O que continua pendente
 

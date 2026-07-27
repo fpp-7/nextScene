@@ -32,6 +32,44 @@ class BackendApplicationTests extends IntegrationTestBase {
      * verificação vai além e confere o conteúdo da configuração de CORS, que
      * era permissiva demais na versão do SecurityConfig que venceu o conflito.
      */
+    /**
+     * O docker-compose usa este endpoint como healthcheck. Ele estava
+     * configurado no application.yml, mas a dependência do actuator nunca havia
+     * sido declarada — a rota não existia e o container ficava eternamente
+     * "unhealthy". Nenhum teste pegava isso porque nenhum a chamava.
+     */
+    @Test
+    @DisplayName("/actuator/health responde e é público")
+    void healthEndpointIsAvailable() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/actuator/health"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isOk());
+    }
+
+    @Test
+    @DisplayName("rota pública inexistente devolve 404, não 500")
+    void unknownPublicRouteIsNotFound() throws Exception {
+        // Regressão: o handler genérico capturava NoResourceFoundException e
+        // devolvia 500. Foi assim que /actuator/health, sem a dependência do
+        // actuator, virou "erro interno" em vez de "rota não existe".
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/movies/rota/que/nao/existe"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("rota protegida inexistente é barrada antes de revelar se existe")
+    void unknownProtectedRouteDoesNotLeakExistence() throws Exception {
+        // 403 em vez de 404 aqui é intencional: sem autenticação, a resposta não
+        // deve permitir mapear quais rotas existem.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/rota/que/nao/existe"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isForbidden());
+    }
+
     @Test
     @DisplayName("o CORS não libera qualquer origem com credenciais")
     void corsIsNotWideOpen() {
