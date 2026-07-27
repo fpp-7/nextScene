@@ -140,6 +140,14 @@ public class RecommendationService {
         return result.isEmpty() ? topRatedMovies() : result;
     }
 
+    /**
+     * O motor devolve gêneros separados por barra ("Crime|Drama"); o catálogo
+     * local usa vírgula. Sem normalizar, a mesma tela mostrava os dois formatos.
+     */
+    private String normalizeGenres(String genres) {
+        return genres == null ? "" : genres.replace("|", ", ");
+    }
+
     private List<MovieResponse> topRatedMovies() {
         var pageable = PageRequest.of(0, RECOMMENDATION_COUNT, Sort.by(Sort.Direction.DESC, "rating"));
         return movieRepository.findAll(pageable).getContent().stream()
@@ -175,14 +183,21 @@ public class RecommendationService {
             if (movie != null) {
                 movies.add(MovieResponse.from(movie));
             } else {
-                // O motor conhece um filme que não está no catálogo local: devolve
-                // o mínimo que ele forneceu, para não sumir com a recomendação.
+                // O motor conhece um filme que não está no catálogo local — ele é
+                // treinado sobre um dataset maior que o importado pelo backend.
+                // Devolve o mínimo que ele forneceu, para não sumir com a
+                // recomendação.
+                //
+                // A nota vai como 0 (desconhecida), e não como o score do motor:
+                // score é similaridade em [0,1] e nota é escala 0–10. Preencher um
+                // com o outro fazia a interface exibir "0.42292984170696807" onde o
+                // usuário lê nota do filme.
                 movies.add(new MovieResponse(
                         movieId,
                         (String) item.getOrDefault("title", "Desconhecido"),
                         item.get("year") != null ? ((Number) item.get("year")).intValue() : 0,
-                        (String) item.getOrDefault("genres", ""),
-                        item.get("score") != null ? ((Number) item.get("score")).doubleValue() : 0,
+                        normalizeGenres((String) item.getOrDefault("genres", "")),
+                        0,
                         0,
                         "",
                         "",

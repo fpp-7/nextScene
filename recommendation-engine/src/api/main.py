@@ -11,7 +11,12 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.config import API_PREFIX, DEFAULT_TOP_N, MAX_TOP_N
+from src.config import (
+    API_PREFIX,
+    DEFAULT_TOP_N,
+    MAX_TOP_N,
+    MIN_RATINGS_FOR_RECOMMENDATION,
+)
 from src.models.hybrid import HybridRecommender
 from src.preprocessing.cleaner import load_movies, load_ratings
 
@@ -29,6 +34,14 @@ async def lifespan(app: FastAPI):
     state["hybrid"]  = HybridRecommender.load()
     state["movies"]  = load_movies()
     state["ratings"] = load_ratings()
+
+    # Piso de popularidade: sem ele, o content-based devolve a cauda longa do
+    # catálogo — filmes com 5 avaliações batem quase 1.0 de similaridade porque
+    # seu vetor TF-IDF é praticamente só o one-hot de gênero. Ver config.py.
+    counts = state["ratings"].groupby("movieId").size()
+    eligible = counts[counts >= MIN_RATINGS_FOR_RECOMMENDATION].index
+    state["hybrid"].cb.set_eligible_movies(eligible)
+
     logger.info("✅ Modelos carregados.")
     yield
     state.clear()

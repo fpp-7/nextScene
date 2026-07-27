@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../services/storage';
 import { User } from '../types';
 import { authService } from '../services/authService';
 import { setAuthToken, setUnauthorizedHandler } from '../services/api';
@@ -81,9 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const restoreToken = async () => {
       try {
-        const token = await SecureStore.getItemAsync(TOKEN_KEY);
-        const userData = await SecureStore.getItemAsync(USER_KEY);
-        const onboardingDone = await SecureStore.getItemAsync(ONBOARDING_KEY);
+        const token = await storage.getItem(TOKEN_KEY);
+        const userData = await storage.getItem(USER_KEY);
+        const onboardingDone = await storage.getItem(ONBOARDING_KEY);
 
         if (token && userData && !token.startsWith('mock-')) {
           const user = JSON.parse(userData);
@@ -93,9 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             payload: { user, token, hasCompletedOnboarding: onboardingDone === 'true' },
           });
         } else {
-          await SecureStore.deleteItemAsync(TOKEN_KEY);
-          await SecureStore.deleteItemAsync(USER_KEY);
-          await SecureStore.deleteItemAsync(ONBOARDING_KEY);
+          await storage.removeItem(TOKEN_KEY);
+          await storage.removeItem(USER_KEY);
+          await storage.removeItem(ONBOARDING_KEY);
           dispatch({ type: 'SET_LOADING', payload: false });
         }
       } catch {
@@ -114,10 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const clearSession = useCallback(async (keepOnboarding: boolean) => {
     setAuthToken(null);
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-    await SecureStore.deleteItemAsync(USER_KEY);
+    await storage.removeItem(TOKEN_KEY);
+    await storage.removeItem(USER_KEY);
     if (!keepOnboarding) {
-      await SecureStore.deleteItemAsync(ONBOARDING_KEY);
+      await storage.removeItem(ONBOARDING_KEY);
     }
     dispatch({ type: 'LOGOUT' });
   }, []);
@@ -133,13 +133,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const startSession = async (user: User, token: string) => {
     setAuthToken(token);
-    await SecureStore.setItemAsync(TOKEN_KEY, token);
-    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+    await storage.setItem(TOKEN_KEY, token);
+    await storage.setItem(USER_KEY, JSON.stringify(user));
     dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token } });
 
     // Restaura a flag de onboarding: quem já concluiu não deve refazê-lo ao
     // relogar depois de uma expiração de sessão.
-    const onboardingDone = await SecureStore.getItemAsync(ONBOARDING_KEY);
+    const onboardingDone = await storage.getItem(ONBOARDING_KEY);
     if (onboardingDone === 'true') {
       dispatch({ type: 'COMPLETE_ONBOARDING' });
     }
@@ -164,11 +164,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUser = (user: User) => {
     dispatch({ type: 'UPDATE_USER', payload: user });
-    SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+    storage.setItem(USER_KEY, JSON.stringify(user));
   };
 
   const completeOnboarding = async () => {
-    await SecureStore.setItemAsync(ONBOARDING_KEY, 'true');
+    await storage.setItem(ONBOARDING_KEY, 'true');
     dispatch({ type: 'COMPLETE_ONBOARDING' });
   };
 

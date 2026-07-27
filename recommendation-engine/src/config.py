@@ -68,6 +68,20 @@ CINEMA_ERAS = {
     "recent":       (2016, 9999),
 }
 
+# ─── Piso de popularidade ─────────────────────────────────────────────────────
+# Filmes com pouquíssimas avaliações não entram nas recomendações.
+#
+# O modelo content-based pontua por similaridade de cosseno sobre TF-IDF. Filmes
+# obscuros têm vetor esparso, dominado pelo one-hot de gênero, e por isso casam
+# quase perfeitamente com o perfil do usuário — enquanto filmes populares têm
+# tags ricas que diluem a similaridade. Sem piso, quem avaliava Shawshank e
+# Dark Knight recebia "Deadly Crossing" (5 avaliações) e "Savage Salvation" (7).
+#
+# No ml-latest a mediana é 5 avaliações por filme e 62% têm menos de 10, então o
+# problema domina o resultado. Com 50, sobram 16.034 filmes elegíveis (19% do
+# catálogo) — ainda mais que o dataset small inteiro.
+MIN_RATINGS_FOR_RECOMMENDATION = int(os.getenv("MIN_RATINGS_FOR_RECOMMENDATION", 50))
+
 # ─── API ──────────────────────────────────────────────────────────────────────
 API_PREFIX      = "/api/v1"
 DEFAULT_TOP_N   = 10
