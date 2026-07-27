@@ -9,3 +9,9 @@ notebooks/
 .env.example
 tests/
 README*.md
+
+# Dataset e modelos ficam fora do contexto de build: são reconstruídos por
+# scripts/bootstrap.py dentro da imagem. Sem esta exclusão, o `data/` local
+# (918 MB) era enviado ao daemon do Docker a cada build.
+data/
+models_saved/

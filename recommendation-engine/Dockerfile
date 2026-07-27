@@ -11,10 +11,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code and data
 COPY src/ ./src/
-COPY data/ ./data/
-COPY models_saved/ ./models_saved/
+COPY scripts/ ./scripts/
+
+# Baixa o MovieLens e treina os modelos dentro da imagem.
+#
+# A versão anterior fazia `COPY data/ ./data/` e `COPY models_saved/ ...`, mas
+# ambos estão no .gitignore: a imagem só buildava em quem já tinha os arquivos
+# em disco, e em clone limpo o build quebrava. Além disso, o `data/` local tem
+# 918 MB e ia inteiro para o contexto de build a cada execução.
+RUN python scripts/bootstrap.py
 
 EXPOSE 8000
 
