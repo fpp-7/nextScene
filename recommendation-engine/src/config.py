@@ -20,7 +20,13 @@ if ENV == "development":
 else:
     MOVIELENS_PATH = ROOT_DIR / os.getenv("MOVIELENS_FULL_PATH", "data/raw/ml-latest")
 
-DATA_PROCESSED_PATH = ROOT_DIR / "data" / "processed"
+# O cache Parquet é separado por dataset.
+#
+# Antes era um diretório único: alternar ENV entre development e production
+# mudava o CSV de origem, mas load_ratings() encontrava o Parquet da execução
+# anterior e o devolvia. Treinar "com o dataset completo" continuava usando as
+# 100 mil avaliações do small, sem nenhum aviso.
+DATA_PROCESSED_PATH = ROOT_DIR / "data" / "processed" / MOVIELENS_PATH.name
 MODELS_PATH         = ROOT_DIR / "models_saved"
 DATA_RAW_PATH = MOVIELENS_PATH.parent  # aponta para data/raw/
 

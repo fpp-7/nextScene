@@ -93,6 +93,9 @@ def train_models() -> None:
 
 
 def main() -> int:
+    from src.utils.console import enable_utf8_stdout
+    enable_utf8_stdout()
+
     parser = argparse.ArgumentParser(description="Bootstrap do motor de recomendação")
     parser.add_argument("--force", action="store_true", help="Re-treina mesmo que os modelos existam")
     args = parser.parse_args()

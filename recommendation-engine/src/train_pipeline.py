@@ -92,6 +92,11 @@ async def run_pipeline(evaluate: bool = False, skip_tmdb: bool = False, reset_tm
 
 
 if __name__ == "__main__":
+    # O pipeline imprime setas e emojis; sem isto o console cp1252 do Windows
+    # derruba o processo com UnicodeEncodeError no meio do treino.
+    from src.utils.console import enable_utf8_stdout
+    enable_utf8_stdout()
+
     parser = argparse.ArgumentParser(description="NextScene Training Pipeline")
     parser.add_argument("--evaluate", action="store_true", help="Inclui cross-validation")
     parser.add_argument("--skip-tmdb", action="store_true", help="Pula a etapa de enriquecimento de metadados TMDB.")

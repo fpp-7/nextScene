@@ -6,7 +6,11 @@ __pycache__/
 
 # Dataset
 data/
+
+# Modelos treinados: binários grandes (26 MB no small, 2,3 GB no completo).
+# São reconstruídos por scripts/bootstrap.py — não pertencem ao repositório.
 models_saved/*.joblib
+models_saved*/
 
 # Jupyter Notebooks
 .ipynb_checkpoints/
