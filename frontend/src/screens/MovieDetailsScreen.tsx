@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, Linking, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Linking, Platform, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowLeft, Star, Calendar, Bookmark, ThumbsUp, ThumbsDown, Play } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,12 +13,12 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { ImageFallback } from '../components/ImageFallback';
 
-const { width } = Dimensions.get('window');
-
 type Props = NativeStackScreenProps<RootStackParamList, 'MovieDetails'>;
 
 export function MovieDetailsScreen({ route, navigation }: Props) {
   const { id } = route.params;
+  // Do hook, não do módulo: o layout precisa acompanhar rotação e split-screen.
+  const { width } = useWindowDimensions();
   const { isInWatchlist, addToWatchlist, removeFromWatchlist } = useWatchlist();
   
   const [movie, setMovie] = useState<Movie | null>(null);
@@ -64,27 +64,32 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
 
   const toggleWatchlist = async () => {
     if (!movie) return;
-    if (isSaved) {
-      await removeFromWatchlist(id);
-    } else {
-      await addToWatchlist(movie);
+    // O contexto faz rollback otimista e devolve o erro em vez de escondê-lo:
+    // antes o ícone simplesmente voltava ao normal e o usuário achava que salvou.
+    const failure = isSaved ? await removeFromWatchlist(id) : await addToWatchlist(movie);
+    if (failure) {
+      Alert.alert('Erro', failure);
     }
   };
 
   const handleRate = async (type: 'like' | 'dislike') => {
     if (isRating) return;
+    const previous = rating;
     setIsRating(true);
     try {
       if (rating === type) {
-        // undo rating - call DELETE on backend
         await ratingService.deleteRating(id);
         setRating(null);
       } else {
         await ratingService.rateMovie(id, type);
         setRating(type);
       }
-    } catch (err) {
-      // handle error silently
+    } catch (err: any) {
+      setRating(previous); // desfaz a mudança otimista
+      Alert.alert(
+        'Erro',
+        err.response?.data?.error || 'Não foi possível salvar sua avaliação. Tente novamente.'
+      );
     } finally {
       setIsRating(false);
     }
@@ -102,7 +107,12 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.headerAbsolute}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+          >
             <ArrowLeft size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -114,15 +124,26 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.heroSection}>
+        <View style={[styles.heroSection, { height: width * 1.2 }]}>
           <ImageFallback source={{ uri: movie.poster }} style={styles.poster} />
           <View style={styles.heroOverlay} />
           
           <SafeAreaView edges={['top']} style={styles.headerAbsolute}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Voltar"
+            >
               <ArrowLeft size={24} color={colors.white} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={toggleWatchlist} style={styles.bookmarkButton}>
+            <TouchableOpacity
+              onPress={toggleWatchlist}
+              style={styles.bookmarkButton}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSaved }}
+              accessibilityLabel={isSaved ? 'Remover da watchlist' : 'Adicionar à watchlist'}
+            >
               <Bookmark size={24} color={isSaved ? colors.primary : colors.white} fill={isSaved ? colors.primary : 'transparent'} />
             </TouchableOpacity>
           </SafeAreaView>
@@ -158,26 +179,42 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
             </View>
           </View>
 
+          {/* O backend devolve os gêneros numa única string ("Action, Sci-Fi");
+              exibir tudo dentro de um chip só ficava ilegível. */}
           <View style={styles.genreRow}>
-            <View style={styles.genreChip}>
-              <Text style={styles.genreText}>{movie.genre}</Text>
-            </View>
+            {movie.genre
+              .split(',')
+              .map((g) => g.trim())
+              .filter(Boolean)
+              .map((genre) => (
+                <View key={genre} style={styles.genreChip}>
+                  <Text style={styles.genreText}>{genre}</Text>
+                </View>
+              ))}
           </View>
 
           <View style={styles.actionsRow}>
-            <TouchableOpacity 
-              style={[styles.actionBtn, rating === 'like' && styles.actionBtnActiveLike]} 
+            <TouchableOpacity
+              style={[styles.actionBtn, rating === 'like' && styles.actionBtnActiveLike]}
               activeOpacity={0.7}
               onPress={() => handleRate('like')}
+              disabled={isRating}
+              accessibilityRole="button"
+              accessibilityState={{ selected: rating === 'like', disabled: isRating }}
+              accessibilityLabel="Gostei deste filme"
             >
               <ThumbsUp size={20} color={rating === 'like' ? colors.primary : colors.mutedForeground} />
               <Text style={[styles.actionBtnText, rating === 'like' && styles.actionBtnTextActive]}>Gostei</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionBtn, rating === 'dislike' && styles.actionBtnActiveDislike]} 
+
+            <TouchableOpacity
+              style={[styles.actionBtn, rating === 'dislike' && styles.actionBtnActiveDislike]}
               activeOpacity={0.7}
               onPress={() => handleRate('dislike')}
+              disabled={isRating}
+              accessibilityRole="button"
+              accessibilityState={{ selected: rating === 'dislike', disabled: isRating }}
+              accessibilityLabel="Não gostei deste filme"
             >
               <ThumbsDown size={20} color={rating === 'dislike' ? colors.red400 : colors.mutedForeground} />
               <Text style={[styles.actionBtnText, rating === 'dislike' && { color: colors.red400 }]}>Não Gostei</Text>
@@ -211,7 +248,7 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { paddingBottom: 32 },
-  heroSection: { width: '100%', height: width * 1.2, position: 'relative' },
+  heroSection: { width: '100%', position: 'relative' },
   poster: { width: '100%', height: '100%' },
   heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
   headerAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: Platform.OS === 'ios' ? 32 : 16, zIndex: 10 },
@@ -225,7 +262,7 @@ const styles = StyleSheet.create({
   metadataItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   metadataText: { color: colors.mutedForeground, fontSize: 14, fontWeight: '500' },
   metadataDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.mutedForeground },
-  genreRow: { flexDirection: 'row', marginBottom: 24 },
+  genreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
   genreChip: { backgroundColor: 'rgba(212,160,23,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(212,160,23,0.3)' },
   genreText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
   actionsRow: { flexDirection: 'row', gap: 16, marginBottom: 32 },

@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { User } from '../types';
 import { authService } from '../services/authService';
-import { setAuthToken } from '../services/api';
+import { setAuthToken, setUnauthorizedHandler } from '../services/api';
 
 interface AuthState {
   user: User | null;
@@ -105,31 +105,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreToken();
   }, []);
 
+  /**
+   * Encerra a sessão localmente, sem chamar o servidor. Usado tanto pelo logout
+   * explícito quanto pela expiração do token (401).
+   *
+   * `keepOnboarding` preserva a flag de onboarding concluído: quando a sessão
+   * apenas expira, o usuário não deve refazer o onboarding ao entrar de novo.
+   */
+  const clearSession = useCallback(async (keepOnboarding: boolean) => {
+    setAuthToken(null);
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(USER_KEY);
+    if (!keepOnboarding) {
+      await SecureStore.deleteItemAsync(ONBOARDING_KEY);
+    }
+    dispatch({ type: 'LOGOUT' });
+  }, []);
+
+  // Token expirado/inválido → volta para a tela de login em vez de deixar o app
+  // "logado" mostrando erro em todas as telas.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearSession(true);
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [clearSession]);
+
+  const startSession = async (user: User, token: string) => {
+    setAuthToken(token);
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+    dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token } });
+
+    // Restaura a flag de onboarding: quem já concluiu não deve refazê-lo ao
+    // relogar depois de uma expiração de sessão.
+    const onboardingDone = await SecureStore.getItemAsync(ONBOARDING_KEY);
+    if (onboardingDone === 'true') {
+      dispatch({ type: 'COMPLETE_ONBOARDING' });
+    }
+  };
+
   const login = async (email: string, password: string) => {
     const response = await authService.login({ email, password });
-    setAuthToken(response.token);
-    await SecureStore.setItemAsync(TOKEN_KEY, response.token);
-    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(response.user));
-    dispatch({ type: 'LOGIN_SUCCESS', payload: { user: response.user, token: response.token } });
+    await startSession(response.user, response.token);
   };
 
   const register = async (name: string, email: string, password: string) => {
     const response = await authService.register({ name, email, password });
-    setAuthToken(response.token);
-    await SecureStore.setItemAsync(TOKEN_KEY, response.token);
-    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(response.user));
-    dispatch({ type: 'LOGIN_SUCCESS', payload: { user: response.user, token: response.token } });
+    await startSession(response.user, response.token);
   };
 
   const logout = async () => {
     try {
       await authService.logout();
     } catch {}
-    setAuthToken(null);
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
-    await SecureStore.deleteItemAsync(USER_KEY);
-    await SecureStore.deleteItemAsync(ONBOARDING_KEY);
-    dispatch({ type: 'LOGOUT' });
+    await clearSession(false);
   };
 
   const updateUser = (user: User) => {

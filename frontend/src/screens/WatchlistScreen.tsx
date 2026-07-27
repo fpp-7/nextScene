@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Bookmark } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,41 +46,46 @@ export function WatchlistScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      {/* FlatList em vez de ScrollView + map: a watchlist cresce sem limite e
+          renderizar tudo de uma vez trava a rolagem. */}
+      <FlatList
+        data={items}
+        keyExtractor={(movie) => String(movie.id)}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refreshWatchlist} tintColor={colors.primary} />}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Minha Lista</Text>
-          <Text style={styles.subtitle}>{items.length} {items.length === 1 ? 'filme' : 'filmes'}</Text>
-        </View>
-
-        {items.length === 0 ? (
-          <EmptyState 
-            Icon={Bookmark} 
-            title="Nenhum filme salvo" 
-            description="Adicione filmes a sua watchlist tocando no icone de bookmark" 
-          />
-        ) : (
-          <View style={styles.grid}>
-            {items.map((movie) => (
-              <MovieCard
-                key={movie.id}
-                movie={movie}
-                onPress={(id) => navigation.navigate('MovieDetails', { id })}
-              />
-            ))}
+        refreshControl={
+          <RefreshControl refreshing={isLoading} onRefresh={refreshWatchlist} tintColor={colors.primary} />
+        }
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <Text style={styles.title}>Minha Lista</Text>
+            <Text style={styles.subtitle}>
+              {items.length} {items.length === 1 ? 'filme' : 'filmes'}
+            </Text>
           </View>
+        }
+        ListEmptyComponent={
+          <EmptyState
+            Icon={Bookmark}
+            title="Nenhum filme salvo"
+            description="Adicione filmes à sua watchlist tocando no ícone de bookmark"
+          />
+        }
+        renderItem={({ item }) => (
+          <MovieCard movie={item} onPress={(id) => navigation.navigate('MovieDetails', { id })} />
         )}
-      </ScrollView>
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 24, paddingTop: 16, marginBottom: 24 },
+  header: { paddingTop: 16, marginBottom: 24 },
   title: { color: colors.white, fontSize: 32, fontWeight: '700' },
   subtitle: { color: colors.mutedForeground, fontSize: 14, marginTop: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 24 },
+  listContent: { paddingHorizontal: 24, paddingBottom: 24 },
+  columnWrapper: { justifyContent: 'space-between' },
 });

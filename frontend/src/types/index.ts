@@ -1,6 +1,7 @@
 // User
 export interface User {
-  id: number;
+  /** UUID em texto. Não é numérico — ver nota em UserResponse.java no backend. */
+  id: string;
   name: string;
   email: string;
   genresPreference: string[];
@@ -39,7 +40,8 @@ export interface Movie {
 
 // Rating
 export interface RatingEntry {
-  id?: number;
+  /** UUID em texto. */
+  id?: string;
   movieId: number;
   score?: number;
   type: 'like' | 'dislike' | 'seen';
@@ -47,7 +49,8 @@ export interface RatingEntry {
 
 // Watchlist
 export interface WatchlistItem {
-  id: number;
+  /** UUID em texto. */
+  id: string;
   movieId: number;
   movie: Movie;
   addedAt: string;

@@ -10,7 +10,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowRight, Heart, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
-import { GENRES } from '../data/mock-data';
+import { GENRES } from '../data/genres';
 import { RootStackParamList } from '../navigation/types';
 import { userService } from '../services/userService';
 import { LoadingSpinner } from '../components/LoadingSpinner';

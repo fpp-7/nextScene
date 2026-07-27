@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, Dimensions, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Alert,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star, ThumbsUp, ThumbsDown, Check } from 'lucide-react-native';
@@ -10,6 +10,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../contexts/AuthContext';
 import { ratingService } from '../services/ratingService';
 import { movieService } from '../services/movieService';
+import { ImageFallback } from '../components/ImageFallback';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { ColdStartRating, Movie } from '../types';
 
@@ -40,24 +41,49 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
   }, []);
 
   const setRating = (id: number, type: 'like' | 'dislike' | 'seen') => {
-    setRatings((r) => ({ ...r, [id]: r[id] === type ? undefined! : type }));
+    setRatings((current) => {
+      const next = { ...current };
+      if (next[id] === type) {
+        // Remove a chave em vez de gravar `undefined!`, que vazava para o payload.
+        delete next[id];
+      } else {
+        next[id] = type;
+      }
+      return next;
+    });
   };
+
+  const ratedCount = Object.keys(ratings).length;
 
   const handleFinish = async () => {
     setIsSubmitting(true);
     try {
-      const payload: ColdStartRating[] = Object.entries(ratings)
-        .filter(([_, type]) => type !== undefined)
-        .map(([id, type]) => ({ movieId: Number(id), type }));
-      
+      const payload: ColdStartRating[] = Object.entries(ratings).map(([id, type]) => ({
+        movieId: Number(id),
+        type,
+      }));
+
+      // Grava as avaliações antes de concluir: são elas que alimentam todas as
+      // recomendações seguintes.
       await ratingService.submitColdStart(payload);
-      await completeOnboarding(); // Triggers navigation to MainTabs
+      await completeOnboarding(); // Dispara a navegação para MainTabs
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || err.message || 'Erro ao enviar avaliações iniciais.';
       Alert.alert('Erro', errorMsg);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSkip = () => {
+    Alert.alert(
+      'Pular esta etapa?',
+      'Sem avaliações iniciais, suas primeiras recomendações serão genéricas. Você pode avaliar filmes depois, a qualquer momento.',
+      [
+        { text: 'Continuar avaliando', style: 'cancel' },
+        { text: 'Pular', onPress: () => completeOnboarding() },
+      ]
+    );
   };
 
   return (
@@ -82,7 +108,7 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
               {movies.slice(0, 8).map((movie) => (
                 <View key={movie.id} style={styles.movieItem}>
                   <View style={styles.posterWrap}>
-                    <Image source={{ uri: movie.poster }} style={styles.poster} />
+                    <ImageFallback source={{ uri: movie.poster }} style={styles.poster} />
                     <View style={styles.posterInfo}>
                       <Text style={styles.posterTitle} numberOfLines={1}>{movie.title}</Text>
                       <View style={styles.ratingRow}>
@@ -100,6 +126,11 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
                           type === 'like' ? styles.liked : type === 'dislike' ? styles.disliked : styles.seen
                         )]}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: ratings[movie.id] === type }}
+                        accessibilityLabel={
+                          `${type === 'like' ? 'Gostei de' : type === 'dislike' ? 'Não gostei de' : 'Já assisti'} ${movie.title}`
+                        }
                       >
                         {type === 'like' && <ThumbsUp size={16} color={ratings[movie.id] === 'like' ? colors.primary : colors.mutedForeground} />}
                         {type === 'dislike' && <ThumbsDown size={16} color={ratings[movie.id] === 'dislike' ? colors.red400 : colors.mutedForeground} />}
@@ -112,16 +143,24 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
             </View>
           </ScrollView>
         )}
-        <TouchableOpacity 
-          style={styles.button} 
-          onPress={handleFinish} 
+        <TouchableOpacity
+          style={[styles.button, ratedCount === 0 && styles.buttonDisabled]}
+          onPress={ratedCount === 0 ? handleSkip : handleFinish}
           disabled={isSubmitting}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={
+            ratedCount === 0
+              ? 'Pular avaliações e começar a explorar'
+              : `Concluir com ${ratedCount} ${ratedCount === 1 ? 'filme avaliado' : 'filmes avaliados'}`
+          }
         >
           {isSubmitting ? (
             <LoadingSpinner size="small" />
           ) : (
-            <Text style={styles.buttonText}>Começar a Explorar</Text>
+            <Text style={styles.buttonText}>
+              {ratedCount === 0 ? 'Pular por agora' : `Começar a Explorar (${ratedCount})`}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -152,5 +191,6 @@ const styles = StyleSheet.create({
   disliked: { backgroundColor: 'rgba(239,68,68,0.2)' },
   seen: { backgroundColor: 'rgba(255,255,255,0.2)' },
   button: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 8, marginBottom: 16 },
+  buttonDisabled: { backgroundColor: colors.secondary },
   buttonText: { color: colors.primaryForeground, fontSize: 16, fontWeight: '500' },
 });

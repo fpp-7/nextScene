@@ -53,7 +53,12 @@ export function EditProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+        >
           <ArrowLeft size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.title}>Editar Perfil</Text>

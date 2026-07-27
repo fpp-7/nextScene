@@ -4,6 +4,7 @@ import io.nextscene.backend.model.AppUser;
 import io.nextscene.backend.model.Movie;
 import io.nextscene.backend.model.Rating;
 import io.nextscene.backend.model.enums.Avaliacao;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -12,6 +13,8 @@ import java.util.UUID;
 
 public interface RatingRepository extends JpaRepository<Rating, UUID> {
 
+    /** Carrega o filme junto para evitar N+1 ao montar a resposta. */
+    @EntityGraph(attributePaths = "movie")
     List<Rating> findByUser(AppUser user);
 
     Optional<Rating> findByUserAndMovie(AppUser user, Movie movie);

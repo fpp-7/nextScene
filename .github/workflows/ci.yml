@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Java 21)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Os testes de integração sobem um Postgres via Testcontainers, que usa o
+      # Docker já disponível no runner do GitHub Actions.
+      - name: Testes
+        working-directory: backend
+        run: ./mvnw -B verify
+
+      - name: Publicar relatórios
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports/
+          retention-days: 7
+
+  engine:
+    name: Recommendation engine (Python 3.11)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # Só o necessário para os testes. O requirements.txt completo arrasta
+      # jupyter, matplotlib e afins, que não têm por que rodar no CI.
+      - name: Instalar dependências
+        working-directory: recommendation-engine
+        run: pip install "numpy<2" pandas scikit-learn fastapi pydantic pytest
+
+      - name: Testes
+        working-directory: recommendation-engine
+        run: python -m pytest tests/ -q
+
+  frontend:
+    name: Frontend (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: npm ci
+
+      - name: Checagem de tipos
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Testes
+        working-directory: frontend
+        run: npm test -- --ci
+
+  secrets:
+    name: Verificação de segredos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # O .env com a chave real do TMDB já foi versionado uma vez. Este passo
+      # existe para que não volte a acontecer sem alguém perceber.
+      - name: Nenhum .env versionado
+        run: |
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "::error::.env está versionado — remova com 'git rm --cached .env'"
+            exit 1
+          fi
+          echo "OK: nenhum .env versionado"
+
+      - name: Sem segredos com valor padrão no application.yml
+        working-directory: backend/src/main/resources
+        run: |
+          if grep -nE '(secret|api-key):.*\$\{[A-Z_]+:[^}]+\}' application.yml; then
+            echo "::error::segredo com valor padrão embutido — use \${VAR} sem fallback"
+            exit 1
+          fi
+          echo "OK: nenhum segredo com valor padrão"

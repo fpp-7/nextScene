@@ -34,13 +34,20 @@ public class AuthService {
 
     public AuthResponse login(AuthRequest request) {
         AppUser user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new IllegalArgumentException("Credenciais inválidas."));
+                .orElseThrow(InvalidCredentialsException::new);
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("Credenciais inválidas.");
+            throw new InvalidCredentialsException();
         }
 
         String token = jwtService.generateToken(user.getId().toString(), user.getEmail());
         return new AuthResponse(token, UserResponse.from(user));
+    }
+
+    /** Mensagem propositalmente genérica: não revela se o e-mail existe. */
+    public static class InvalidCredentialsException extends RuntimeException {
+        public InvalidCredentialsException() {
+            super("Credenciais inválidas.");
+        }
     }
 }

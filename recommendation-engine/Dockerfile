@@ -18,4 +18,8 @@ COPY models_saved/ ./models_saved/
 
 EXPOSE 8000
 
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Cada worker carrega os modelos e o dataset em memória — subir WORKERS aumenta
+# a vazão proporcionalmente à RAM disponível. 2 é um default conservador.
+ENV WORKERS=2
+
+CMD ["sh", "-c", "uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers ${WORKERS}"]

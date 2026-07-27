@@ -7,6 +7,9 @@ spring:
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 3000
 
   jpa:
     hibernate:
@@ -15,21 +18,78 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
 
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      client:
+        config:
+          default:
+            # Sem isto, o Feign usa 10s de conexão e 60s de leitura: um motor
+            # lento seguraria as threads do Tomcat por um minuto inteiro.
+            connect-timeout: 2000
+            read-timeout: 5000
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      recommendation-engine:
+        # Abre o circuito após metade das chamadas falharem numa janela de 10.
+        # Enquanto aberto, a falha é imediata em vez de esperar o timeout.
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+
 server:
   port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Apenas o mínimo. Antes /actuator/** estava liberado por completo, o que
+        # exporia env, configprops e heapdump caso fossem habilitados.
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
 
 app:
+  cors:
+    # Dev: Expo em localhost, LAN e túnel. Em produção sobrescreva com os domínios reais.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://10.*:*,http://192.168.*:*,exp://*}
   jwt:
-    secret: ${JWT_SECRET:nextscene-dev-secret-key-change-in-production-min-32-chars!!}
+    # Sem default: a aplicação não sobe sem um segredo explícito. Gere com:
+    #   openssl rand -base64 48
+    secret: ${JWT_SECRET}
     expiration: ${JWT_EXPIRATION:1800000}
+  security:
+    login:
+      max-attempts: ${LOGIN_MAX_ATTEMPTS:10}
+      window-minutes: ${LOGIN_WINDOW_MINUTES:15}
   recommendation-engine:
     url: ${RECOMMENDATION_ENGINE_URL:http://localhost:8000}
   tmdb:
-    api-key: ${TMDB_API_KEY:033f05568a4e06d3491ac9c699299e65}
+    # Sem default: a chave é um segredo e não deve viver no repositório.
+    api-key: ${TMDB_API_KEY:}
     base-url: ${TMDB_BASE_URL:https://api.themoviedb.org/3}
+    enabled: ${TMDB_ENRICHMENT_ENABLED:true}
+    batch-size: ${TMDB_BATCH_SIZE:40}
+    initial-delay-ms: ${TMDB_INITIAL_DELAY_MS:30000}
+    interval-ms: ${TMDB_INTERVAL_MS:60000}
+
+logging:
+  level:
+    io.nextscene.backend: ${LOG_LEVEL:INFO}

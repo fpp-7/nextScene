@@ -4,7 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowLeft, Heart, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
-import { GENRES } from '../data/mock-data';
+import { GENRES } from '../data/genres';
 import { RootStackParamList } from '../navigation/types';
 import { userService } from '../services/userService';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -64,7 +64,12 @@ export function GenrePreferencesScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+        >
           <ArrowLeft size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.title}>Preferências de Gênero</Text>

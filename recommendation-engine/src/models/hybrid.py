@@ -15,6 +15,13 @@ from src.models.collaborative import CollaborativeModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Limiares para interpretar o histórico do app (escala 0–5).
+# O backend mapeia like → 5.0, seen → 2.5, dislike → 0.0.
+LIKED_THRESHOLD    = 3.5
+DISLIKED_THRESHOLD = 1.5
+# Quanto a semelhança com filmes rejeitados derruba o score de um candidato.
+DISLIKE_PENALTY    = 0.5
+
 
 def _get_user_stage(n_ratings: int) -> str:
     """Determina o estágio do usuário com base no número de ratings."""
@@ -125,6 +132,55 @@ class HybridRecommender:
             on="movieId", how="left"
         )
         return result.reset_index(drop=True)
+
+    def recommend_for_history(
+        self,
+        rated: list[tuple[int, float]],
+        top_n: int = DEFAULT_TOP_N,
+    ) -> pd.DataFrame:
+        """
+        Gera recomendações a partir do histórico de avaliações de um usuário do
+        aplicativo — sem depender de ele existir no dataset de treino.
+
+        `rated` é uma lista de (movie_id, rating) na escala 0–5.
+
+        Limitação conhecida: o SVD colaborativo só sabe pontuar usuários vistos
+        no treino. Usuários do app não estão nesse conjunto, então aqui usamos
+        apenas o sinal content-based, penalizando itens parecidos com os que o
+        usuário rejeitou. Para ativar o CF de verdade é preciso re-treinar
+        incluindo os ratings do app (ver docs/code-review-2026-07.md §3.1).
+        """
+        if not rated:
+            return pd.DataFrame()
+
+        watched  = [mid for mid, _ in rated]
+        liked    = [mid for mid, score in rated if score >= LIKED_THRESHOLD]
+        disliked = [mid for mid, score in rated if score <= DISLIKED_THRESHOLD]
+        stage    = _get_user_stage(len(rated))
+
+        logger.info(
+            f"Histórico do app | {len(rated)} avaliações "
+            f"({len(liked)} curtidas, {len(disliked)} rejeitadas) | estágio: {stage}"
+        )
+
+        if not liked:
+            # Sem sinal positivo não há perfil a construir; quem chamou decide o fallback.
+            return pd.DataFrame()
+
+        recs = self.cb.recommend_for_user(
+            liked_movie_ids=liked,
+            top_n=top_n * 3,
+            exclude_ids=watched,
+        )
+        if recs.empty:
+            return recs
+
+        if disliked:
+            penalty = self.cb.profile_scores(disliked, recs["movieId"].tolist())
+            recs["score"] = recs["score"] - DISLIKE_PENALTY * penalty
+
+        recs["stage"] = stage
+        return recs.sort_values("score", ascending=False).head(top_n).reset_index(drop=True)
 
     def recommend_cold_start(
         self,

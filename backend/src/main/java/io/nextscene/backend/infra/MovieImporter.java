@@ -27,17 +27,7 @@ public class MovieImporter implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM movie", Integer.class);
-        Integer unsplashCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM movie WHERE poster_url LIKE '%unsplash%'", Integer.class);
-        boolean hasUnsplash = unsplashCount != null && unsplashCount > 0;
-
-        if (count != null && count > 15 && !hasUnsplash) {
-            log.info("ℹ️ Banco de dados já possui {} filmes. Pulando importação de catálogo.", count);
-            return;
-        }
-
-        log.info("🎬 Iniciando importação do catálogo MovieLens (movies.csv + links.csv)...");
+        log.info("🎬 Verificando catálogo MovieLens (movies.csv + links.csv)...");
 
         // 1. Load links mapping: movieId -> tmdbId
         Map<Integer, Integer> linksMap = new HashMap<>();
@@ -105,15 +95,22 @@ public class MovieImporter implements CommandLineRunner {
             }
         }
 
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM movie", Integer.class);
+        if (count != null && count >= records.size()) {
+            log.info("ℹ️ Catálogo já importado ({} filmes no banco). Pulando importação.", count);
+            return;
+        }
+
         log.info("⏳ Salvando {} filmes no banco via Batch Insert...", records.size());
 
-        // Clear existing movies to avoid duplicate keys with seeded mock movies
-        jdbcTemplate.update("DELETE FROM watch_list");
-        jdbcTemplate.update("DELETE FROM rating");
-        jdbcTemplate.update("DELETE FROM movie");
-
-        String sql = "INSERT INTO movie (id, movie_id, tmdb_id, title, genres, year, poster_url, rating) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+        // Idempotente: filmes já presentes são ignorados. Nunca apagamos movie/rating/
+        // watch_list aqui — isso destruiria dados de usuário a cada startup.
+        String sql = """
+                INSERT INTO movie (id, movie_id, tmdb_id, title, genres, year, poster_url, rating)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (movie_id) DO NOTHING
+                """;
+        int[] affected = jdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
             @Override
             public void setValues(PreparedStatement ps, int i) throws SQLException {
                 MovieImportRecord r = records.get(i);
@@ -135,7 +132,9 @@ public class MovieImporter implements CommandLineRunner {
             }
         });
 
-        log.info("✅ Catálogo importado com sucesso! Total: {} filmes.", records.size());
+        int inserted = Arrays.stream(affected).filter(n -> n > 0).sum();
+        log.info("✅ Catálogo importado: {} filmes novos ({} já existiam).",
+                inserted, records.size() - inserted);
     }
 
     private List<String> parseCsvLine(String line) {

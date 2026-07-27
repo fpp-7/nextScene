@@ -15,6 +15,9 @@ from src.preprocessing.feature_engineering import FeatureBuilder
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Teto do cache de similaridade por filme (ver recommend_by_movie).
+SIMILARITY_CACHE_SIZE = 512
+
 
 class ContentBasedModel:
     """
@@ -54,10 +57,14 @@ class ContentBasedModel:
         """
         idx = self.feature_builder.get_movie_index(movie_id)
 
-        # Usa cache para evitar recomputar similaridades repetidas
+        # Usa cache para evitar recomputar similaridades repetidas.
+        # Limitado: cada entrada é um vetor de tamanho n_movies e o modelo vive
+        # por todo o ciclo do processo — sem teto, isso vaza memória.
         if movie_id not in self._similarity_cache:
             movie_vector = self.feature_builder.feature_matrix[idx]
             scores = cosine_similarity(movie_vector, self.feature_builder.feature_matrix).flatten()
+            if len(self._similarity_cache) >= SIMILARITY_CACHE_SIZE:
+                self._similarity_cache.pop(next(iter(self._similarity_cache)))  # FIFO
             self._similarity_cache[movie_id] = scores
 
         scores = self._similarity_cache[movie_id].copy()
@@ -116,6 +123,37 @@ class ContentBasedModel:
         top_scores    = scores[top_indices]
 
         return self._build_result_df(top_movie_ids, top_scores)
+
+    def profile_scores(
+        self,
+        profile_movie_ids: list[int],
+        candidate_movie_ids,
+    ) -> np.ndarray:
+        """
+        Similaridade de cada candidato ao perfil médio de `profile_movie_ids`.
+
+        Diferente de `recommend_for_user`, não ordena nem corta: devolve o score
+        de cada candidato na mesma ordem recebida. Usado para penalizar filmes
+        parecidos com os que o usuário rejeitou.
+        """
+        indices = [
+            self.feature_builder.get_movie_index(mid)
+            for mid in profile_movie_ids
+            if mid in self.feature_builder.movie_ids
+        ]
+        if not indices:
+            return np.zeros(len(candidate_movie_ids))
+
+        profile = np.asarray(self.feature_builder.feature_matrix[indices].mean(axis=0))
+        sims    = cosine_similarity(profile, self.feature_builder.feature_matrix).flatten()
+
+        out = []
+        for mid in candidate_movie_ids:
+            try:
+                out.append(float(sims[self.feature_builder.get_movie_index(mid)]))
+            except (ValueError, KeyError, IndexError):
+                out.append(0.0)
+        return np.asarray(out)
 
     # ─── Persistência ─────────────────────────────────────────────────────────
 

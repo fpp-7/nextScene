@@ -30,6 +30,16 @@ public class RatingController {
                 .body(ratingService.createRating(user.getId(), request));
     }
 
+    /** Grava várias avaliações de uma vez — usado ao final do onboarding. */
+    @PostMapping("/batch")
+    public ResponseEntity<List<RatingResponse>> createRatings(
+            @AuthenticationPrincipal AppUser user,
+            @Valid @RequestBody List<RatingRequest> requests
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ratingService.createRatings(user.getId(), requests));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<List<RatingResponse>> getMyRatings(@AuthenticationPrincipal AppUser user) {
         return ResponseEntity.ok(ratingService.getMyRatings(user.getId()));

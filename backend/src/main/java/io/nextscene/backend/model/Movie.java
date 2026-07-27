@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -42,4 +43,8 @@ public class Movie {
     private String castList;
 
     private Double rating;
+
+    /** Quando o filme foi enriquecido via TMDB. Null = pendente para o job. */
+    @Column(name = "enriched_at")
+    private Instant enrichedAt;
 }

@@ -17,9 +17,14 @@ type WatchlistAction =
   | { type: 'REMOVE_ITEM'; payload: number }
   | { type: 'SET_ERROR'; payload: string | null };
 
+/**
+ * As mutações devolvem `null` em sucesso ou a mensagem de erro em falha.
+ * Antes o erro era engolido após o rollback: o ícone voltava ao estado
+ * anterior sem aviso e o usuário acreditava que a ação tinha funcionado.
+ */
 interface WatchlistContextType extends WatchlistState {
-  addToWatchlist: (movie: Movie) => Promise<void>;
-  removeFromWatchlist: (movieId: number) => Promise<void>;
+  addToWatchlist: (movie: Movie) => Promise<string | null>;
+  removeFromWatchlist: (movieId: number) => Promise<string | null>;
   isInWatchlist: (movieId: number) => boolean;
   refreshWatchlist: () => Promise<void>;
 }
@@ -77,22 +82,26 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, refreshWatchlist]);
 
-  const addToWatchlist = async (movie: Movie) => {
+  const addToWatchlist = async (movie: Movie): Promise<string | null> => {
     dispatch({ type: 'ADD_ITEM', payload: movie });
     try {
       await watchlistService.addToWatchlist(movie.id);
+      return null;
     } catch (err: any) {
       dispatch({ type: 'REMOVE_ITEM', payload: movie.id }); // rollback
+      return err.response?.data?.error || 'Não foi possível adicionar à watchlist.';
     }
   };
 
-  const removeFromWatchlist = async (movieId: number) => {
+  const removeFromWatchlist = async (movieId: number): Promise<string | null> => {
     const item = state.items.find(m => m.id === movieId);
     dispatch({ type: 'REMOVE_ITEM', payload: movieId });
     try {
       await watchlistService.removeFromWatchlist(movieId);
+      return null;
     } catch (err: any) {
       if (item) dispatch({ type: 'ADD_ITEM', payload: item }); // rollback
+      return err.response?.data?.error || 'Não foi possível remover da watchlist.';
     }
   };
 

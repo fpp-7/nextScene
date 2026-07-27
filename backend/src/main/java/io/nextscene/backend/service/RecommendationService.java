@@ -6,10 +6,15 @@ import io.nextscene.backend.dto.MovieResponse;
 import io.nextscene.backend.dto.RecommendationResponse;
 import io.nextscene.backend.model.AppUser;
 import io.nextscene.backend.model.Movie;
+import io.nextscene.backend.model.Rating;
 import io.nextscene.backend.repository.MovieRepository;
+import io.nextscene.backend.repository.RatingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -18,32 +23,56 @@ import java.util.*;
 @RequiredArgsConstructor
 public class RecommendationService {
 
+    private static final int RECOMMENDATION_COUNT = 20;
+
     private final RecommendationEngineClient engineClient;
     private final MovieRepository movieRepository;
+    private final RatingRepository ratingRepository;
     private final UserService userService;
-    private final MovieService movieService;
 
+    /**
+     * Recomendações personalizadas para um usuário do aplicativo.
+     * <p>
+     * O histórico de avaliações é lido do Postgres e enviado ao motor a cada
+     * chamada — o motor é stateless e não precisa conhecer o usuário. Isso
+     * substitui o esquema anterior, que enviava {@code interactionCount} como se
+     * fosse o id de um usuário do MovieLens: todos os usuários com o mesmo
+     * contador recebiam exatamente as mesmas sugestões.
+     */
+    @Transactional(readOnly = true)
     public RecommendationResponse getRecommendations(UUID userId) {
         AppUser user = userService.findById(userId);
+        List<Rating> history = ratingRepository.findByUser(user);
+
+        if (history.isEmpty()) {
+            log.debug("Usuário {} ainda não avaliou nada — usando preferências de gênero.", userId);
+            return buildResponse(recommendByGenrePreference(user), user);
+        }
 
         try {
-            // Call Python engine with user's interaction count as a pseudo user_id
-            var engineResponse = engineClient.getRecommendations(
-                    user.getInteractionCount() > 0 ? user.getInteractionCount() : 1,
-                    20
-            );
+            List<Map<String, Object>> payload = history.stream()
+                    .filter(r -> r.getMovie() != null && r.getMovie().getMovieId() != null)
+                    .<Map<String, Object>>map(r -> Map.of(
+                            "movie_id", r.getMovie().getMovieId(),
+                            "rating", r.getAvaliacao().toRatingScale()
+                    ))
+                    .toList();
 
-            List<MovieResponse> allRecs = mapEngineResults(engineResponse);
+            var engineResponse = engineClient.getRecommendationsFromHistory(Map.of(
+                    "ratings", payload,
+                    "top_n", RECOMMENDATION_COUNT
+            ));
 
-            // Split into two lists for the frontend
-            int half = allRecs.size() / 2;
-            List<MovieResponse> aiPicks = allRecs.subList(0, Math.min(half, allRecs.size()));
-            List<MovieResponse> similarUsers = allRecs.subList(Math.min(half, allRecs.size()), allRecs.size());
+            List<MovieResponse> recs = mapEngineResults(engineResponse);
+            if (recs.isEmpty()) {
+                return buildResponse(recommendByGenrePreference(user), user);
+            }
+            return buildResponse(recs, user);
 
-            return new RecommendationResponse(aiPicks, similarUsers);
         } catch (Exception e) {
-            log.warn("Engine unavailable, falling back to DB: {}", e.getMessage());
-            return getFallbackRecommendations();
+            log.warn("Motor de recomendação indisponível para o usuário {} — usando fallback local. Causa: {}",
+                    userId, e.toString());
+            return buildResponse(recommendByGenrePreference(user), user);
         }
     }
 
@@ -55,46 +84,102 @@ public class RecommendationService {
                     .toList();
 
             if (likedIds.isEmpty()) {
-                return getFallbackRecommendations();
+                return buildResponse(topRatedMovies(), null);
             }
 
-            var engineRequest = Map.of(
+            var engineResponse = engineClient.getColdStartRecommendations(Map.of(
                     "liked_movie_ids", likedIds,
-                    "top_n", 10
-            );
+                    "top_n", RECOMMENDATION_COUNT
+            ));
+            List<MovieResponse> recs = mapEngineResults(engineResponse);
+            return buildResponse(recs.isEmpty() ? topRatedMovies() : recs, null);
 
-            var engineResponse = engineClient.getColdStartRecommendations(engineRequest);
-            List<MovieResponse> results = mapEngineResults(engineResponse);
-
-            int half = results.size() / 2;
-            return new RecommendationResponse(
-                    results.subList(0, Math.min(half, results.size())),
-                    results.subList(Math.min(half, results.size()), results.size())
-            );
         } catch (Exception e) {
-            log.warn("Cold-start engine unavailable, falling back: {}", e.getMessage());
-            return getFallbackRecommendations();
+            log.warn("Motor indisponível no cold start — usando fallback local. Causa: {}", e.toString());
+            return buildResponse(topRatedMovies(), null);
         }
     }
 
+    /**
+     * Monta a resposta em duas trilhas. A primeira são as recomendações do motor;
+     * a segunda são filmes bem avaliados nos gêneros preferidos do usuário — um
+     * sinal de fato diferente, e não a mesma lista cortada ao meio como antes.
+     */
+    private RecommendationResponse buildResponse(List<MovieResponse> primary, AppUser user) {
+        Set<Integer> alreadyShown = new HashSet<>();
+        primary.forEach(m -> alreadyShown.add(m.id()));
+
+        List<MovieResponse> byGenre = (user == null ? List.<MovieResponse>of() : recommendByGenrePreference(user))
+                .stream()
+                .filter(m -> !alreadyShown.contains(m.id()))
+                .limit(10)
+                .toList();
+
+        return new RecommendationResponse(primary.stream().limit(10).toList(), byGenre);
+    }
+
+    /** Filmes mais bem avaliados nos gêneros que o usuário marcou como preferidos. */
+    private List<MovieResponse> recommendByGenrePreference(AppUser user) {
+        List<String> preferences = user.getGenresPreference();
+        if (preferences == null || preferences.isEmpty()) {
+            return topRatedMovies();
+        }
+
+        var pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "rating"));
+        List<MovieResponse> result = new ArrayList<>();
+        Set<Integer> seen = new HashSet<>();
+
+        for (String preference : preferences) {
+            String genre = MovieService.translateGenre(preference);
+            for (Movie movie : movieRepository.findByGenresContainingIgnoreCase(genre, pageable)) {
+                if (movie.getMovieId() != null && seen.add(movie.getMovieId())) {
+                    result.add(MovieResponse.from(movie));
+                }
+            }
+        }
+        return result.isEmpty() ? topRatedMovies() : result;
+    }
+
+    private List<MovieResponse> topRatedMovies() {
+        var pageable = PageRequest.of(0, RECOMMENDATION_COUNT, Sort.by(Sort.Direction.DESC, "rating"));
+        return movieRepository.findAll(pageable).getContent().stream()
+                .map(MovieResponse::from)
+                .toList();
+    }
+
+    /**
+     * Converte a resposta do motor em DTOs, buscando os metadados no catálogo local.
+     * Faz uma única consulta para todos os ids, em vez de uma por filme.
+     */
     @SuppressWarnings("unchecked")
     private List<MovieResponse> mapEngineResults(Map<String, Object> engineResponse) {
-        List<Map<String, Object>> results = (List<Map<String, Object>>) engineResponse.get("results");
-        if (results == null) return List.of();
+        var results = (List<Map<String, Object>>) engineResponse.get("results");
+        if (results == null || results.isEmpty()) return List.of();
+
+        List<Integer> movieIds = results.stream()
+                .map(item -> item.get("movie_id"))
+                .filter(Objects::nonNull)
+                .map(id -> ((Number) id).intValue())
+                .toList();
+
+        Map<Integer, Movie> catalog = new HashMap<>();
+        movieRepository.findByMovieIdIn(movieIds)
+                .forEach(movie -> catalog.put(movie.getMovieId(), movie));
 
         List<MovieResponse> movies = new ArrayList<>();
         for (var item : results) {
+            if (item.get("movie_id") == null) continue;
             int movieId = ((Number) item.get("movie_id")).intValue();
-            Optional<Movie> movieOpt = movieRepository.findByMovieId(movieId);
-            if (movieOpt.isPresent()) {
-                Movie movie = movieOpt.get();
-                movieService.enrichMovieFromTmdb(movie);
+
+            Movie movie = catalog.get(movieId);
+            if (movie != null) {
                 movies.add(MovieResponse.from(movie));
             } else {
-                // Build a minimal response from engine data
+                // O motor conhece um filme que não está no catálogo local: devolve
+                // o mínimo que ele forneceu, para não sumir com a recomendação.
                 movies.add(new MovieResponse(
                         movieId,
-                        (String) item.getOrDefault("title", "Unknown"),
+                        (String) item.getOrDefault("title", "Desconhecido"),
                         item.get("year") != null ? ((Number) item.get("year")).intValue() : 0,
                         (String) item.getOrDefault("genres", ""),
                         item.get("score") != null ? ((Number) item.get("score")).doubleValue() : 0,
@@ -106,20 +191,5 @@ public class RecommendationService {
             }
         }
         return movies;
-    }
-
-    private RecommendationResponse getFallbackRecommendations() {
-        var pageable = org.springframework.data.domain.PageRequest.of(0, 20,
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "rating"));
-        List<Movie> topMovies = movieRepository.findAll(pageable).getContent();
-        // Enrich the first 10 fallback movies dynamically
-        topMovies.stream().limit(10).forEach(movieService::enrichMovieFromTmdb);
-
-        List<MovieResponse> responses = topMovies.stream().map(MovieResponse::from).toList();
-        int half = responses.size() / 2;
-        return new RecommendationResponse(
-                responses.subList(0, Math.min(half, responses.size())),
-                responses.subList(Math.min(half, responses.size()), responses.size())
-        );
     }
 }

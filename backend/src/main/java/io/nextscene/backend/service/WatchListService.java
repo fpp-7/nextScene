@@ -21,11 +21,12 @@ public class WatchListService {
     private final UserService userService;
     private final MovieService movieService;
 
+    @Transactional(readOnly = true)
     public List<WatchlistItemResponse> getWatchlist(UUID userId) {
         AppUser user = userService.findById(userId);
         return watchListRepository.findByUser(user).stream()
                 .map(wl -> new WatchlistItemResponse(
-                        wl.getId().getMostSignificantBits() & Long.MAX_VALUE,
+                        wl.getId().toString(),
                         wl.getMovie().getMovieId(),
                         MovieResponse.from(wl.getMovie()),
                         wl.getAddedAt().toString()

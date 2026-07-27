@@ -1,7 +1,8 @@
 package io.nextscene.backend.dto;
 
+/** O id é o UUID do item em texto (ver a nota em {@link UserResponse}). */
 public record WatchlistItemResponse(
-        long id,
+        String id,
         int movieId,
         MovieResponse movie,
         String addedAt

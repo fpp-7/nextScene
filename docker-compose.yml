@@ -30,10 +30,15 @@ services:
       dockerfile: Dockerfile
     container_name: nextscene-engine
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # Sem `ports`: o motor não tem autenticação nenhuma e só precisa ser
+    # alcançável pelo backend, pela rede interna do compose. Publicá-lo em
+    # 0.0.0.0:8000 deixava qualquer um na rede consultá-lo à vontade.
+    # Para depurar localmente: docker compose run --rm -p 8000:8000 recommendation-engine
+    expose:
+      - "8000"
     environment:
       ENV: development
+      WORKERS: ${ENGINE_WORKERS:-2}
       TMDB_API_KEY: ${TMDB_API_KEY:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
@@ -57,15 +62,25 @@ services:
       DB_NAME: ${POSTGRES_DB:-nextscene}
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      JWT_SECRET: ${JWT_SECRET:-nextscene-super-secret-key-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-1800000}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:*,http://10.*:*,http://192.168.*:*,exp://*}
       RECOMMENDATION_ENGINE_URL: http://recommendation-engine:8000
       TMDB_API_KEY: ${TMDB_API_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     depends_on:
       db:
         condition: service_healthy
+      # service_started, não service_healthy: o backend tem fallback local quando
+      # o motor está fora do ar, então não faz sentido travar a subida da API
+      # inteira esperando o carregamento dos modelos.
       recommendation-engine:
-        condition: service_healthy
+        condition: service_started
 
 volumes:
   pgdata:

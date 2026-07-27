@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RefreshCw, Sparkles, Users } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -80,7 +80,12 @@ export function RecommendationsScreen({ navigation }: Props) {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Para Você</Text>
-          <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
+          <TouchableOpacity
+            onPress={onRefresh}
+            style={styles.refreshBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Atualizar recomendações"
+          >
             <RefreshCw size={20} color={colors.primary} />
           </TouchableOpacity>
         </View>
@@ -96,40 +101,55 @@ export function RecommendationsScreen({ navigation }: Props) {
             </View>
           </View>
           
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-            {aiPicks.map((movie) => (
-              <View key={movie.id} style={{ marginRight: 16 }}>
-                <MovieCard
-                  movie={movie}
-                  onPress={(id) => navigation.navigate('MovieDetails', { id })}
-                />
+          <FlatList
+            horizontal
+            data={aiPicks}
+            keyExtractor={(movie) => `ai-${movie.id}`}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalList}
+            renderItem={({ item }) => (
+              <View style={{ marginRight: 16 }}>
+                <MovieCard movie={item} onPress={(id) => navigation.navigate('MovieDetails', { id })} />
               </View>
-            ))}
-          </ScrollView>
+            )}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>
+                Avalie alguns filmes para receber recomendações personalizadas.
+              </Text>
+            }
+          />
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.iconBox}>
-              <Users size={20} color={colors.primary} />
-            </View>
-            <View>
-              <Text style={styles.sectionTitle}>Usuários Similares</Text>
-              <Text style={styles.sectionSubtitle}>O que pessoas como você estão assistindo</Text>
-            </View>
-          </View>
-          
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalList}>
-            {similarUsers.map((movie) => (
-              <View key={movie.id} style={{ marginRight: 16 }}>
-                <MovieCard
-                  movie={movie}
-                  onPress={(id) => navigation.navigate('MovieDetails', { id })}
-                />
+        {/* Antes esta seção se chamava "Usuários Similares" e recebia a mesma
+            lista da seção acima, cortada ao meio — o rótulo afirmava algo que a
+            API não entregava. Agora o backend manda de fato outro sinal: filmes
+            bem avaliados nos gêneros que o usuário escolheu. */}
+        {similarUsers.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.iconBox}>
+                <Users size={20} color={colors.primary} />
               </View>
-            ))}
-          </ScrollView>
-        </View>
+              <View>
+                <Text style={styles.sectionTitle}>Dos Seus Gêneros</Text>
+                <Text style={styles.sectionSubtitle}>Destaques nos gêneros que você prefere</Text>
+              </View>
+            </View>
+
+            <FlatList
+              horizontal
+              data={similarUsers}
+              keyExtractor={(movie) => `genre-${movie.id}`}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              renderItem={({ item }) => (
+                <View style={{ marginRight: 16 }}>
+                  <MovieCard movie={item} onPress={(id) => navigation.navigate('MovieDetails', { id })} />
+                </View>
+              )}
+            />
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -146,4 +166,5 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.white, fontSize: 20, fontWeight: '600' },
   sectionSubtitle: { color: colors.mutedForeground, fontSize: 14 },
   horizontalList: { paddingHorizontal: 24 },
+  emptyText: { color: colors.mutedForeground, fontSize: 14, paddingHorizontal: 24 },
 });
