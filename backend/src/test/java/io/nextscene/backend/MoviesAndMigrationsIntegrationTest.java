@@ -38,9 +38,12 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
                 "SELECT indexname FROM pg_indexes WHERE tablename = 'movie'", String.class);
 
         assertThat(indexes)
-                .contains("idx_movie_title_trgm", "idx_movie_genres_trgm", "idx_movie_rating")
+                .contains("idx_movie_title_unaccent_trgm", "idx_movie_title_pt_unaccent_trgm",
+                        "idx_movie_genres_trgm", "idx_movie_rating")
                 // O B-tree em genres era inútil para LIKE '%...%' e foi removido.
-                .doesNotContain("idx_movie_genres");
+                .doesNotContain("idx_movie_genres")
+                // Substituídos pelas versões sem acento na V7.
+                .doesNotContain("idx_movie_title_trgm", "idx_movie_title_pt_trgm");
     }
 
     @Test
@@ -116,6 +119,64 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(get("/api/movies/search?q=jUmAnJi"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(0)));
+    }
+
+    @Test
+    @DisplayName("V6 cria a coluna e o índice do título traduzido")
+    void localizedTitleColumnExists() {
+        var columns = jdbcTemplate.queryForList(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'movie'",
+                String.class);
+        assertThat(columns).contains("title_pt");
+
+        var indexes = jdbcTemplate.queryForList(
+                "SELECT indexname FROM pg_indexes WHERE tablename = 'movie'", String.class);
+        assertThat(indexes).contains("idx_movie_title_pt_unaccent_trgm");
+    }
+
+    @Test
+    @DisplayName("V7 instala a extensão unaccent")
+    void unaccentExtensionIsInstalled() {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_extension WHERE extname = 'unaccent'", Integer.class);
+
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("a busca encontra pelo título traduzido e pelo original")
+    void searchMatchesBothTitles() throws Exception {
+        // O job do TMDB é quem preenche title_pt em produção; aqui o valor é
+        // gravado direto para o teste não depender de rede.
+        jdbcTemplate.update(
+                "UPDATE movie SET title_pt = 'O Poderoso Chefão' WHERE movie_id = 858");
+
+        mockMvc.perform(get("/api/movies/search?q=Poderoso"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("O Poderoso Chefão"));
+
+        // Buscar pelo nome em inglês continua funcionando.
+        mockMvc.perform(get("/api/movies/search?q=Godfather"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(
+                        org.hamcrest.Matchers.greaterThan(0)));
+    }
+
+    @Test
+    @DisplayName("a busca ignora acentos nos dois sentidos")
+    void searchIgnoresAccents() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE movie SET title_pt = 'O Poderoso Chefão' WHERE movie_id = 858");
+
+        // Sem acento encontra o título acentuado — digitar "Chefao" é comum.
+        mockMvc.perform(get("/api/movies/search?q=Poderoso Chefao"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("O Poderoso Chefão"));
+
+        // E com acento também.
+        mockMvc.perform(get("/api/movies/search?q=Chefão"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("O Poderoso Chefão"));
     }
 
     @Test

@@ -25,8 +25,13 @@ public class Movie {
     @Column(name = "tmdb_id")
     private Integer tmdbId;
 
+    /** Título original, como vem do MovieLens. É o que o motor conhece. */
     @Column(nullable = false, length = 500)
     private String title;
+
+    /** Título em português, preenchido pelo TMDB. Null quando não há tradução. */
+    @Column(name = "title_pt", length = 500)
+    private String titlePt;
 
     @Column(length = 500)
     private String genres;

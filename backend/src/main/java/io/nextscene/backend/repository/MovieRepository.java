@@ -26,23 +26,39 @@ public interface MovieRepository extends JpaRepository<Movie, UUID> {
 
     /**
      * Filmes que ainda não passaram pelo TMDB e têm tmdb_id conhecido.
-     * Usado pelo job de enriquecimento em background (casa com o índice parcial
-     * idx_movie_pending_enrichment).
+     * Usado pelo job de enriquecimento em background.
+     * <p>
+     * A ordem por nota espelha a das telas do aplicativo, que também listam por
+     * nota decrescente. Sem isso o job percorria o catálogo em ordem arbitrária,
+     * e os filmes que o usuário realmente vê só ganhavam pôster, sinopse e
+     * título em português depois de horas.
      */
-    @Query("SELECT m FROM Movie m WHERE m.tmdbId IS NOT NULL AND m.enrichedAt IS NULL")
+    @Query("""
+            SELECT m FROM Movie m
+            WHERE m.tmdbId IS NOT NULL AND m.enrichedAt IS NULL
+            ORDER BY m.rating DESC NULLS LAST, m.movieId ASC
+            """)
     List<Movie> findPendingEnrichment(Pageable pageable);
 
     @Query("SELECT COUNT(m) FROM Movie m WHERE m.tmdbId IS NOT NULL AND m.enrichedAt IS NULL")
     long countPendingEnrichment();
 
     /**
-     * Busca por título usando similaridade por trigrama, apoiada no índice GIN
-     * criado na migration V5. Bem mais rápida que LIKE '%termo%' em varredura.
+     * Busca por título usando similaridade por trigrama, apoiada nos índices GIN
+     * das migrations V5 e V6. Bem mais rápida que LIKE '%termo%' em varredura.
+     * <p>
+     * Considera o título original e o traduzido, ignorando acentos: "The
+     * Godfather", "O Poderoso Chefão" e "Poderoso Chefao" chegam ao mesmo filme.
      */
     @Query(value = """
             SELECT * FROM movie
-            WHERE title ILIKE '%' || :term || '%'
-            ORDER BY similarity(title, :term) DESC, rating DESC NULLS LAST
+            WHERE immutable_unaccent(title) ILIKE '%' || immutable_unaccent(:term) || '%'
+               OR immutable_unaccent(COALESCE(title_pt, '')) ILIKE '%' || immutable_unaccent(:term) || '%'
+            ORDER BY GREATEST(
+                         similarity(immutable_unaccent(title), immutable_unaccent(:term)),
+                         similarity(immutable_unaccent(COALESCE(title_pt, '')), immutable_unaccent(:term))
+                     ) DESC,
+                     rating DESC NULLS LAST
             LIMIT :limit OFFSET :offset
             """, nativeQuery = true)
     List<Movie> searchByTitle(@Param("term") String term,

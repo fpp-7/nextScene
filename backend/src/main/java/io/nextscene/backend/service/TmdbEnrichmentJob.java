@@ -88,6 +88,14 @@ public class TmdbEnrichmentJob {
                 return false;
             }
 
+            // A consulta usa language=pt-BR, então "title" já vem traduzido.
+            // O título original é preservado: o motor de recomendação trabalha
+            // com ele, e a busca continua aceitando o nome em inglês.
+            String localizedTitle = (String) response.get("title");
+            if (localizedTitle != null && !localizedTitle.isBlank()) {
+                movie.setTitlePt(localizedTitle);
+            }
+
             String posterPath = (String) response.get("poster_path");
             if (posterPath != null && !posterPath.isBlank()) {
                 movie.setPosterUrl("https://image.tmdb.org/t/p/w500" + posterPath);
