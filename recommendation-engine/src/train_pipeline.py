@@ -16,6 +16,7 @@ from src.preprocessing.feature_engineering import FeatureBuilder
 from src.preprocessing.tmdb_enricher import run_enricher, TMDB_METADATA_FILE # Import TMDB enricher and file path
 from src.models.content_based import ContentBasedModel
 from src.models.collaborative import CollaborativeModel
+from src.models.item_item import ItemItemModel
 from src.models.hybrid import HybridRecommender
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -29,14 +30,14 @@ async def run_pipeline(evaluate: bool = False, skip_tmdb: bool = False, reset_tm
     logger.info("=" * 60)
 
     # ── 1. Carrega dados ──────────────────────────────────────────────────────
-    logger.info("\n[1/6] Carregando dados...")
+    logger.info("\n[1/7] Carregando dados...")
     dataset_summary()
     ratings = load_ratings()
     movies  = load_movies()
     tags    = load_tags()
 
     # ── 2. Enriquecimento TMDB (opcional) ─────────────────────────────────────
-    logger.info("\n[2/6] Verificando enriquecimento TMDB...")
+    logger.info("\n[2/7] Verificando enriquecimento TMDB...")
     if skip_tmdb:
         logger.info("  → Ignorando enriquecimento TMDB (--skip-tmdb ativo).")
     elif TMDB_METADATA_FILE.exists() and not reset_tmdb:
@@ -49,19 +50,19 @@ async def run_pipeline(evaluate: bool = False, skip_tmdb: bool = False, reset_tm
         await run_enricher(reset=reset_tmdb)
 
     # ── 3. Feature Engineering ────────────────────────────────────────────────
-    logger.info("\n[3/6] Construindo features content-based...")
+    logger.info("\n[3/7] Construindo features content-based...")
     builder = FeatureBuilder()
     builder.build(movies, tags)
     builder.save()
 
     # ── 4. Modelo Content-Based ───────────────────────────────────────────────
-    logger.info("\n[4/6] Treinando modelo Content-Based...")
+    logger.info("\n[4/7] Treinando modelo Content-Based...")
     cb_model = ContentBasedModel()
     cb_model.fit(movies, builder)
     cb_model.save()
 
     # ── 5. Modelo Colaborativo ────────────────────────────────────────────────
-    logger.info("\n[5/6] Treinando modelo Colaborativo (SVD)...")
+    logger.info("\n[5/7] Treinando modelo Colaborativo (SVD)...")
     cf_model = CollaborativeModel()
     cf_model.fit(ratings)
 

@@ -53,9 +53,13 @@ class HybridRecommender:
         recs = recommender.recommend_cold_start(liked_movie_ids=[1,2,3], top_n=10)
     """
 
-    def __init__(self, content_model: ContentBasedModel, collaborative_model: CollaborativeModel):
+    def __init__(self, content_model: ContentBasedModel, collaborative_model: CollaborativeModel,
+                 item_item_model=None):
         self.cb = content_model
         self.cf = collaborative_model
+        # Opcional para manter compatibilidade com modelos serializados antes de
+        # o item-item existir; nesses casos o content-based segue respondendo.
+        self.ii = item_item_model
 
     # ─── Recomendação Principal ────────────────────────────────────────────────
 
@@ -167,20 +171,57 @@ class HybridRecommender:
             # Sem sinal positivo não há perfil a construir; quem chamou decide o fallback.
             return pd.DataFrame()
 
-        recs = self.cb.recommend_for_user(
-            liked_movie_ids=liked,
-            top_n=top_n * 3,
-            exclude_ids=watched,
-        )
-        if recs.empty:
-            return recs
+        # ── Colaborativo item-item (preferencial) ────────────────────────────
+        # "Quem gostou disto também gostou daquilo", derivado do comportamento de
+        # 200 mil usuários. Diferente do SVD, funciona para quem não estava no
+        # treino — basta a lista do que a pessoa avaliou.
+        recs = self._recommend_item_item(rated, watched, top_n)
+        source = "item_item"
 
-        if disliked:
-            penalty = self.cb.profile_scores(disliked, recs["movieId"].tolist())
-            recs["score"] = recs["score"] - DISLIKE_PENALTY * penalty
+        # ── Content-based (fallback) ─────────────────────────────────────────
+        # Usado quando o item-item não tem o que dizer: histórico curto demais,
+        # ou filmes avaliados que não entraram no índice por serem pouco
+        # avaliados no dataset.
+        if recs is None or recs.empty:
+            source = "content_based"
+            recs = self.cb.recommend_for_user(
+                liked_movie_ids=liked,
+                top_n=top_n * 3,
+                exclude_ids=watched,
+            )
+            if recs.empty:
+                return recs
 
+            if disliked:
+                penalty = self.cb.profile_scores(disliked, recs["movieId"].tolist())
+                recs["score"] = recs["score"] - DISLIKE_PENALTY * penalty
+
+        logger.info("Recomendação servida por: %s", source)
         recs["stage"] = stage
+        recs["source"] = source
         return recs.sort_values("score", ascending=False).head(top_n).reset_index(drop=True)
+
+    def _recommend_item_item(self, rated, watched, top_n) -> pd.DataFrame | None:
+        """Roda o item-item e anexa os metadados dos filmes. None se indisponível."""
+        model = getattr(self, "ii", None)
+        if model is None:
+            return None
+
+        try:
+            recs = model.recommend(rated=rated, top_n=top_n * 3, exclude_ids=watched)
+        except Exception:
+            logger.exception("Falha no item-item — caindo para o content-based")
+            return None
+
+        if recs.empty:
+            return None
+
+        # O item-item devolve apenas movieId e score; os metadados vêm do
+        # catálogo que o content-based já carrega.
+        return recs.merge(
+            self.cb.movies[["movieId", "title_clean", "genres", "year", "era"]],
+            on="movieId", how="inner",
+        )
 
     def recommend_cold_start(
         self,
