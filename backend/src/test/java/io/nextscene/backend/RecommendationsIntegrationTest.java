@@ -86,8 +86,13 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
 
     /** Extrai os ids dos filmes de uma das trilhas da resposta. */
     private List<Integer> idsOf(tools.jackson.databind.JsonNode track) {
+        return idsOf(track, "id");
+    }
+
+    /** Extrai o campo indicado de cada item de um array JSON. */
+    private List<Integer> idsOf(tools.jackson.databind.JsonNode array, String field) {
         var ids = new java.util.ArrayList<Integer>();
-        track.forEach(movie -> ids.add(movie.get("id").asInt()));
+        array.forEach(item -> ids.add(item.get(field).asInt()));
         return ids;
     }
 
@@ -102,6 +107,52 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiPicks").isArray());
+    }
+
+    /**
+     * Avaliação é insumo do algoritmo, não resultado dele. Recomendar de volta o
+     * filme que a pessoa acabou de curtir é contradição — e era o que a trilha
+     * por gênero fazia, com metade das sugestões sendo filmes já avaliados.
+     */
+    @Test
+    @DisplayName("nenhuma trilha recomenda filme que o usuário já avaliou")
+    void neverRecommendsAlreadyRatedMovies() throws Exception {
+        String token = bearer();
+
+        var genres = objectMapper.writeValueAsString(Map.of("liked", List.of("Acao", "Drama", "Crime")));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/users/me/genres")
+                .header("Authorization", token)
+                .contentType(MediaType.APPLICATION_JSON).content(genres));
+
+        // Avalia justamente filmes bem pontuados, que a trilha por gênero
+        // escolheria por estarem no topo da ordenação por nota.
+        var ratings = objectMapper.writeValueAsString(List.of(
+                Map.of("movieId", 318, "type", "like"),
+                Map.of("movieId", 858, "type", "like"),
+                Map.of("movieId", 296, "type", "like"),
+                Map.of("movieId", 2959, "type", "seen"),
+                Map.of("movieId", 50, "type", "dislike")
+        ));
+        mockMvc.perform(post("/api/ratings/batch")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content(ratings))
+                .andExpect(status().isCreated());
+
+        var rated = idsOf(objectMapper.readTree(
+                mockMvc.perform(get("/api/ratings/me").header("Authorization", token))
+                        .andReturn().getResponse().getContentAsString()), "movieId");
+
+        var body = objectMapper.readTree(
+                mockMvc.perform(get("/api/recommendations").header("Authorization", token))
+                        .andReturn().getResponse().getContentAsString());
+
+        org.assertj.core.api.Assertions.assertThat(idsOf(body.get("aiPicks"), "id"))
+                .as("trilha do motor")
+                .doesNotContainAnyElementsOf(rated);
+        org.assertj.core.api.Assertions.assertThat(idsOf(body.get("similarUsers"), "id"))
+                .as("trilha por gênero")
+                .doesNotContainAnyElementsOf(rated);
     }
 
     @Test
