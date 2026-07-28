@@ -28,15 +28,19 @@ public interface MovieRepository extends JpaRepository<Movie, UUID> {
      * Filmes que ainda não passaram pelo TMDB e têm tmdb_id conhecido.
      * Usado pelo job de enriquecimento em background.
      * <p>
-     * A ordem por nota espelha a das telas do aplicativo, que também listam por
-     * nota decrescente. Sem isso o job percorria o catálogo em ordem arbitrária,
-     * e os filmes que o usuário realmente vê só ganhavam pôster, sinopse e
-     * título em português depois de horas.
+     * A ordem espelha a das prateleiras do aplicativo. Sem isso o job percorria
+     * o catálogo em ordem arbitrária, e os filmes que o usuário realmente vê só
+     * ganhavam pôster, sinopse e título em português depois de horas.
+     * <p>
+     * O desempate por ano existe para a prateleira "Mais Recentes": filmes ainda
+     * não enriquecidos têm nota 0 e ficariam todos no fim da fila, deixando
+     * aquela faixa sem pôster por muito tempo. Ordenando o grupo de nota 0 do
+     * mais novo para o mais antigo, ela se preenche junto com as demais.
      */
     @Query("""
             SELECT m FROM Movie m
             WHERE m.tmdbId IS NOT NULL AND m.enrichedAt IS NULL
-            ORDER BY m.rating DESC NULLS LAST, m.movieId ASC
+            ORDER BY m.rating DESC NULLS LAST, m.year DESC NULLS LAST, m.movieId ASC
             """)
     List<Movie> findPendingEnrichment(Pageable pageable);
 

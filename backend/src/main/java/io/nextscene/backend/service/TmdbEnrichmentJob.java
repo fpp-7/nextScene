@@ -111,6 +111,11 @@ public class TmdbEnrichmentJob {
                 movie.setRating(voteAverage.doubleValue());
             }
 
+            Number voteCount = (Number) response.get("vote_count");
+            if (voteCount != null) {
+                movie.setVoteCount(voteCount.intValue());
+            }
+
             Map<String, Object> credits = (Map<String, Object>) response.get("credits");
             if (credits != null) {
                 var castList = (List<Map<String, Object>>) credits.get("cast");

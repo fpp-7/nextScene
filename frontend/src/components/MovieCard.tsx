@@ -1,12 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Star } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { Movie } from '../types';
 import { ImageFallback } from './ImageFallback';
-
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48 - 16) / 2;
+import { useCardLayout } from '../utils/layout';
 
 interface Props {
   movie: Movie;
@@ -14,21 +12,33 @@ interface Props {
 }
 
 export function MovieCard({ movie, onPress }: Props) {
+  // Do hook, não de `Dimensions.get('window')` no escopo do módulo: aquele
+  // valor era congelado no primeiro render e assumia sempre duas colunas. Numa
+  // janela de 1920px cada card ficava com 928px de largura e, pelo aspect ratio
+  // 2/3, quase 1400px de altura.
+  const { cardWidth } = useCardLayout();
+
   return (
-    <TouchableOpacity 
-      style={styles.card} 
+    <TouchableOpacity
+      style={[styles.card, { width: cardWidth }]}
       onPress={() => onPress(movie.id)}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`${movie.title}. Abrir detalhes`}
     >
       <View style={styles.posterContainer}>
         <ImageFallback 
           source={{ uri: movie.poster }} 
           style={styles.poster} 
         />
-        <View style={styles.ratingBadge}>
-          <Star size={12} color={colors.primaryForeground} fill={colors.primaryForeground} />
-          <Text style={styles.ratingText}>{movie.rating}</Text>
-        </View>
+        {/* Sem nota, não há selo: filme ainda não enriquecido via TMDB
+            chega com 0, e "0.0" parece nota péssima em vez de nota ausente. */}
+        {movie.rating > 0 && (
+          <View style={styles.ratingBadge}>
+            <Star size={12} color={colors.primaryForeground} fill={colors.primaryForeground} />
+            <Text style={styles.ratingText}>{movie.rating.toFixed(1)}</Text>
+          </View>
+        )}
       </View>
       <Text style={styles.title} numberOfLines={1}>{movie.title}</Text>
       <Text style={styles.genre} numberOfLines={1}>{movie.genre}</Text>
@@ -38,7 +48,6 @@ export function MovieCard({ movie, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    width: CARD_WIDTH,
     marginBottom: 20,
   },
   posterContainer: {

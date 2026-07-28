@@ -54,9 +54,46 @@ public class MovieService {
         return GENRE_TRANSLATION.getOrDefault(genre.toLowerCase().trim(), genre);
     }
 
-    @Cacheable(value = "movies", key = "#genre + ':' + #page + ':' + #size")
-    public List<MovieResponse> getMovies(String genre, int page, int size) {
-        Pageable pageable = pageable(page, size);
+    /**
+     * Critérios de ordenação do catálogo.
+     * <p>
+     * Antes existia só um, por nota — e a tela o rotulava como "Em Alta". Nota
+     * média mede qualidade percebida, não alcance: um documentário com 60 votos
+     * pode ter média 9,0 sem que ninguém esteja assistindo.
+     */
+    public enum SortBy {
+        /** Mais avaliados no TMDB. É o sinal real de "em alta". */
+        POPULAR,
+        /** Mais recentes primeiro; entre os do mesmo ano, os mais vistos. */
+        RECENT,
+        /** Melhor nota média. */
+        RATING;
+
+        static SortBy from(String value) {
+            if (value == null || value.isBlank()) return RATING;
+            try {
+                return valueOf(value.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException(
+                        "Ordenação inválida: '" + value + "'. Use popular, recent ou rating.");
+            }
+        }
+
+        Sort toSort() {
+            return switch (this) {
+                // NULLS LAST importa: filmes ainda não enriquecidos têm o campo
+                // nulo e não podem encabeçar a lista.
+                case POPULAR -> Sort.by(Sort.Order.desc("voteCount").nullsLast());
+                case RECENT -> Sort.by(Sort.Order.desc("year").nullsLast(),
+                                       Sort.Order.desc("voteCount").nullsLast());
+                case RATING -> Sort.by(Sort.Order.desc("rating").nullsLast());
+            };
+        }
+    }
+
+    @Cacheable(value = "movies", key = "#genre + ':' + #sort + ':' + #page + ':' + #size")
+    public List<MovieResponse> getMovies(String genre, String sort, int page, int size) {
+        Pageable pageable = pageable(page, size, SortBy.from(sort));
 
         List<Movie> movies;
         if (genre != null && !genre.isBlank() && !genre.equalsIgnoreCase("Todos")) {
@@ -93,9 +130,8 @@ public class MovieService {
                 .orElseThrow(() -> new MovieNotFoundException(movieId));
     }
 
-    private Pageable pageable(int page, int size) {
-        return PageRequest.of(Math.max(page, 0), clampSize(size),
-                Sort.by(Sort.Direction.DESC, "rating"));
+    private Pageable pageable(int page, int size, SortBy sortBy) {
+        return PageRequest.of(Math.max(page, 0), clampSize(size), sortBy.toSort());
     }
 
     private int clampSize(int size) {

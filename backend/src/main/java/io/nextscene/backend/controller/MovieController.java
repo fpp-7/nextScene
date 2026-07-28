@@ -19,13 +19,20 @@ public class MovieController {
      * Catálogo paginado. Antes devolvia sempre os mesmos 30 primeiros registros
      * sem forma de avançar — o resto do catálogo era inalcançável pelo app.
      */
+    /**
+     * Catálogo paginado.
+     *
+     * @param sort {@code popular} (mais avaliados), {@code recent} (mais novos)
+     *             ou {@code rating} (melhor nota, padrão)
+     */
     @GetMapping
     public ResponseEntity<List<MovieResponse>> getMovies(
             @RequestParam(required = false) String genre,
+            @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return ResponseEntity.ok(movieService.getMovies(genre, page, size));
+        return ResponseEntity.ok(movieService.getMovies(genre, sort, page, size));
     }
 
     @GetMapping("/{id}")

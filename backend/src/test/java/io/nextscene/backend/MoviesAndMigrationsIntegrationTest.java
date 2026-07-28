@@ -198,6 +198,58 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("cada ordenação devolve uma lista diferente")
+    void sortCriteriaProduceDifferentLists() throws Exception {
+        // Sem vote_count preenchido (o job roda em background), a ordenação por
+        // popularidade ainda precisa responder — apenas com tudo empatado.
+        jdbcTemplate.update("UPDATE movie SET vote_count = 5000 WHERE movie_id = 296");
+        jdbcTemplate.update("UPDATE movie SET vote_count = 9000 WHERE movie_id = 2571");
+
+        String popular = mockMvc.perform(get("/api/movies?sort=popular&size=5"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String recent = mockMvc.perform(get("/api/movies?sort=recent&size=5"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String rating = mockMvc.perform(get("/api/movies?sort=rating&size=5"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        assertThat(popular).isNotEqualTo(recent);
+        assertThat(rating).isNotEqualTo(recent);
+    }
+
+    @Test
+    @DisplayName("popularidade ordena por número de avaliações, não por nota")
+    void popularUsesVoteCount() throws Exception {
+        jdbcTemplate.update("UPDATE movie SET vote_count = NULL");
+        jdbcTemplate.update("UPDATE movie SET vote_count = 99999 WHERE movie_id = 2571");
+
+        mockMvc.perform(get("/api/movies?sort=popular&size=1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(2571));
+    }
+
+    @Test
+    @DisplayName("mais recentes começa pelos filmes de maior ano")
+    void recentStartsWithNewestYear() throws Exception {
+        String body = mockMvc.perform(get("/api/movies?sort=recent&size=5"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        var years = new java.util.ArrayList<Integer>();
+        objectMapper.readTree(body).forEach(m -> years.add(m.get("year").asInt()));
+
+        assertThat(years).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        assertThat(years.get(0)).isGreaterThan(2000);
+    }
+
+    @Test
+    @DisplayName("ordenação desconhecida devolve 400 com mensagem útil")
+    void unknownSortIsRejected() throws Exception {
+        mockMvc.perform(get("/api/movies?sort=aleatorio"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        org.hamcrest.Matchers.containsString("aleatorio")));
+    }
+
+    @Test
     @DisplayName("filme inexistente devolve 404, não 400")
     void unknownMovieIsNotFound() throws Exception {
         mockMvc.perform(get("/api/movies/99999999"))

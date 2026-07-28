@@ -86,9 +86,11 @@ app:
     api-key: ${TMDB_API_KEY:}
     base-url: ${TMDB_BASE_URL:https://api.themoviedb.org/3}
     enabled: ${TMDB_ENRICHMENT_ENABLED:true}
-    batch-size: ${TMDB_BATCH_SIZE:40}
-    initial-delay-ms: ${TMDB_INITIAL_DELAY_MS:30000}
-    interval-ms: ${TMDB_INTERVAL_MS:60000}
+    # ~5 req/s. O TMDB tolera bem mais; o gargalo aqui é não estourar o
+    # rate limit num pico, não a velocidade. Com 40/min o catálogo levava 4h.
+    batch-size: ${TMDB_BATCH_SIZE:100}
+    initial-delay-ms: ${TMDB_INITIAL_DELAY_MS:15000}
+    interval-ms: ${TMDB_INTERVAL_MS:20000}
 
 logging:
   level:

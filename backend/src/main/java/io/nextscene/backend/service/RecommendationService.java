@@ -34,6 +34,12 @@ public class RecommendationService {
      */
     private static final int ENGINE_CANDIDATES = 50;
 
+    /** Sugestões exibidas em cada trilha. */
+    private static final int RESULTS_PER_TRACK = 10;
+
+    /** Quantas posições do topo saem sempre, sem sorteio (ver withVariety). */
+    private static final int GUARANTEED_TOP = 4;
+
     private final RecommendationEngineClient engineClient;
     private final MovieRepository movieRepository;
     private final RatingRepository ratingRepository;
@@ -130,10 +136,9 @@ public class RecommendationService {
      */
     private RecommendationResponse buildResponse(List<MovieResponse> primary, AppUser user,
                                                  Set<Integer> alreadyRated) {
-        List<MovieResponse> firstTrack = primary.stream()
+        List<MovieResponse> firstTrack = withVariety(primary.stream()
                 .filter(m -> !alreadyRated.contains(m.id()))
-                .limit(10)
-                .toList();
+                .toList());
 
         Set<Integer> alreadyShown = new HashSet<>(alreadyRated);
         firstTrack.forEach(m -> alreadyShown.add(m.id()));
@@ -142,10 +147,37 @@ public class RecommendationService {
                 (user == null ? List.<MovieResponse>of() : recommendByGenrePreference(user, alreadyShown))
                 .stream()
                 .filter(m -> !alreadyShown.contains(m.id()))
-                .limit(10)
+                .limit(RESULTS_PER_TRACK)
                 .toList();
 
         return new RecommendationResponse(firstTrack, byGenre);
+    }
+
+    /**
+     * Escolhe as sugestões finais dentro de um conjunto maior de candidatos.
+     * <p>
+     * O item-item é determinístico: mesmo histórico, mesmo resultado. A resposta
+     * saía byte a byte idêntica a cada atualização, e o botão de recarregar
+     * prometia algo que nunca acontecia.
+     * <p>
+     * As primeiras posições são preservadas — são as de maior afinidade e não
+     * faz sentido escondê-las. O restante é sorteado entre os candidatos
+     * seguintes, que já passaram pelo mesmo filtro de qualidade. Assim a lista
+     * muda a cada atualização sem cair em sugestão ruim.
+     */
+    private List<MovieResponse> withVariety(List<MovieResponse> candidates) {
+        if (candidates.size() <= RESULTS_PER_TRACK) {
+            return candidates;
+        }
+
+        List<MovieResponse> chosen = new ArrayList<>(candidates.subList(0, GUARANTEED_TOP));
+
+        List<MovieResponse> rest = new ArrayList<>(
+                candidates.subList(GUARANTEED_TOP, candidates.size()));
+        Collections.shuffle(rest);
+        rest.stream().limit(RESULTS_PER_TRACK - GUARANTEED_TOP).forEach(chosen::add);
+
+        return chosen;
     }
 
     /** Filmes mais bem avaliados nos gêneros que o usuário marcou como preferidos. */

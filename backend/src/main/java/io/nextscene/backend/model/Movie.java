@@ -47,7 +47,15 @@ public class Movie {
     @Column(name = "cast_list", columnDefinition = "TEXT")
     private String castList;
 
+    /** Nota média (TMDB vote_average). Qualidade percebida. */
     private Double rating;
+
+    /**
+     * Quantas pessoas avaliaram no TMDB. Mede alcance, não qualidade — é este o
+     * sinal de "em alta", e não a nota média.
+     */
+    @Column(name = "vote_count")
+    private Integer voteCount;
 
     /** Quando o filme foi enriquecido via TMDB. Null = pendente para o job. */
     @Column(name = "enriched_at")
