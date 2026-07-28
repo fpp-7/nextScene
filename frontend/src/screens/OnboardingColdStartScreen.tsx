@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { messageFor } from '../services/errors';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Alert,
 } from 'react-native';
@@ -68,7 +69,7 @@ export function OnboardingColdStartScreen({ navigation }: Props) {
       await ratingService.submitColdStart(payload);
       await completeOnboarding(); // Dispara a navegação para MainTabs
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.message || 'Erro ao enviar avaliações iniciais.';
+      const errorMsg = messageFor(err, 'Erro ao enviar avaliações iniciais.');
       Alert.alert('Erro', errorMsg);
     } finally {
       setIsSubmitting(false);

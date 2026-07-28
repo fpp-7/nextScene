@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { messageFor } from '../services/errors';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
   useWindowDimensions, RefreshControl, Linking, ActivityIndicator,
@@ -73,7 +74,7 @@ export function DiscoverScreen({ navigation }: Props) {
         setHasMore(data.length === PAGE_SIZE);
       } catch (err: any) {
         if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return;
-        setError(err.response?.data?.error || err.message || 'Erro ao carregar filmes');
+        setError(messageFor(err, 'Erro ao carregar filmes'));
       } finally {
         setIsLoading(false);
       }

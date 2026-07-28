@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
+import { messageFor } from '../services/errors';
 import { Movie } from '../types';
 import { watchlistService } from '../services/watchlistService';
 import { useAuth } from './AuthContext';
@@ -70,7 +71,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       const items = await watchlistService.getWatchlist();
       dispatch({ type: 'SET_ITEMS', payload: items });
     } catch (err: any) {
-      dispatch({ type: 'SET_ERROR', payload: err.message || 'Erro ao carregar watchlist' });
+      dispatch({ type: 'SET_ERROR', payload: messageFor(err, 'Erro ao carregar watchlist') });
     }
   }, []);
 
@@ -89,7 +90,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       return null;
     } catch (err: any) {
       dispatch({ type: 'REMOVE_ITEM', payload: movie.id }); // rollback
-      return err.response?.data?.error || 'Não foi possível adicionar à watchlist.';
+      return messageFor(err, 'Não foi possível adicionar à watchlist.');
     }
   };
 
@@ -101,7 +102,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       return null;
     } catch (err: any) {
       if (item) dispatch({ type: 'ADD_ITEM', payload: item }); // rollback
-      return err.response?.data?.error || 'Não foi possível remover da watchlist.';
+      return messageFor(err, 'Não foi possível remover da watchlist.');
     }
   };
 

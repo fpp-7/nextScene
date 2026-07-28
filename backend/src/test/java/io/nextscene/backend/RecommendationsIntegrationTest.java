@@ -108,6 +108,6 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
     @DisplayName("recomendações exigem autenticação")
     void recommendationsRequireAuth() throws Exception {
         mockMvc.perform(get("/api/recommendations"))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isUnauthorized());
     }
 }

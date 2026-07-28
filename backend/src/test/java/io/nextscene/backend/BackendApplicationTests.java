@@ -62,12 +62,12 @@ class BackendApplicationTests extends IntegrationTestBase {
     @Test
     @DisplayName("rota protegida inexistente é barrada antes de revelar se existe")
     void unknownProtectedRouteDoesNotLeakExistence() throws Exception {
-        // 403 em vez de 404 aqui é intencional: sem autenticação, a resposta não
-        // deve permitir mapear quais rotas existem.
+        // 401 em vez de 404: sem autenticação, a resposta não deve permitir
+        // mapear quais rotas existem.
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .get("/api/rota/que/nao/existe"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
-                        .status().isForbidden());
+                        .status().isUnauthorized());
     }
 
     @Test

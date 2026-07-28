@@ -24,6 +24,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
 
     /**
      * Origens permitidas para CORS. Em dev cobre Expo (LAN + túnel local);
@@ -45,6 +46,9 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated()
             )
+            // Sem isto, requisição sem credencial válida recebe 403, e o app não
+            // consegue distinguir sessão expirada de falta de permissão.
+            .exceptionHandling(handling -> handling.authenticationEntryPoint(authenticationEntryPoint))
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { messageFor } from '../services/errors';
 import {
   View,
   Text,
@@ -46,7 +47,7 @@ export function RegisterScreen({ navigation }: Props) {
       await register(name, email, password);
       // AuthContext will handle navigation
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro ao criar conta. Tente novamente.';
+      const errorMsg = messageFor(err, 'Erro ao criar conta. Tente novamente.');
       setGeneralError(errorMsg);
     } finally {
       setIsSubmitting(false);

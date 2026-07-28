@@ -67,11 +67,44 @@ class AuthIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Precisa ser 401, não 403. O aplicativo trata 401 como "sessão expirou,
+     * volte ao login"; com 403 o interceptor não dispara e o usuário fica preso
+     * numa sessão morta, vendo erro em todas as telas.
+     * <p>
+     * A versão anterior deste teste aceitava qualquer 4xx e por isso deixou o
+     * bug passar.
+     */
     @Test
-    @DisplayName("rota protegida sem token é barrada")
+    @DisplayName("rota protegida sem token devolve 401")
     void protectedRouteRequiresToken() throws Exception {
         mockMvc.perform(get("/api/users/me"))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("token expirado devolve 401 para que o app deslogue")
+    void expiredTokenReturnsUnauthorized() throws Exception {
+        // Token bem formado, assinado com outro segredo — indistinguível de um
+        // expirado do ponto de vista do filtro.
+        var forged = new io.nextscene.backend.service.JwtService(
+                "outro-segredo-completamente-diferente-com-32+", 1_800_000L)
+                .generateToken(java.util.UUID.randomUUID().toString(), "alguem@exemplo.com");
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + forged))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("escrita sem sessão válida devolve 401, não falha em silêncio")
+    void writeWithoutSessionReturnsUnauthorized() throws Exception {
+        // Era este o caminho que fazia as avaliações sumirem: o POST voltava 403,
+        // o app não deslogava e o like nunca chegava ao banco.
+        var body = objectMapper.writeValueAsString(Map.of("movieId", 1, "type", "like"));
+
+        mockMvc.perform(post("/api/ratings")
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -90,13 +123,13 @@ class AuthIntegrationTest extends IntegrationTestBase {
     @DisplayName("token forjado é rejeitado")
     void forgedTokenIsRejected() throws Exception {
         mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer nao.e.um.token"))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("catálogo é público, mas só para leitura")
     void catalogIsPublicForReadsOnly() throws Exception {
         mockMvc.perform(get("/api/movies?size=1")).andExpect(status().isOk());
-        mockMvc.perform(post("/api/watchlist/1")).andExpect(status().is4xxClientError());
+        mockMvc.perform(post("/api/watchlist/1")).andExpect(status().isUnauthorized());
     }
 }

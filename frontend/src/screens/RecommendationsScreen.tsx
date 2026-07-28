@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
+import { messageFor } from '../services/errors';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RefreshCw, Sparkles, Users } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,7 +35,7 @@ export function RecommendationsScreen({ navigation }: Props) {
       setAiPicks(data.aiPicks);
       setSimilarUsers(data.similarUsers);
     } catch (err: any) {
-      setError(err.message || 'Erro ao carregar recomendações');
+      setError(messageFor(err, 'Erro ao carregar recomendações'));
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { messageFor } from '../services/errors';
 import { ArrowLeft, User, Mail } from 'lucide-react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,7 +44,7 @@ export function EditProfileScreen({ navigation }: Props) {
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2000);
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro ao atualizar perfil';
+      const errorMsg = messageFor(err, 'Erro ao atualizar perfil');
       Alert.alert('Erro', errorMsg);
     } finally {
       setIsSaving(false);

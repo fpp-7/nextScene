@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Linking, Platform, Alert } from 'react-native';
+import { messageFor } from '../services/errors';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ArrowLeft, Star, Calendar, Bookmark, ThumbsUp, ThumbsDown, Play } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,7 +53,7 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
         setRating(null);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Erro ao carregar filme');
+      setError(messageFor(err, 'Erro ao carregar filme'));
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +89,7 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
       setRating(previous); // desfaz a mudança otimista
       Alert.alert(
         'Erro',
-        err.response?.data?.error || 'Não foi possível salvar sua avaliação. Tente novamente.'
+        messageFor(err, 'Não foi possível salvar sua avaliação. Tente novamente.')
       );
     } finally {
       setIsRating(false);

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { messageFor } from '../services/errors';
 import {
   View,
   Text,
@@ -42,7 +43,7 @@ export function LoginScreen({ navigation }: Props) {
       await login(email, password);
       // Navigation is handled by AuthContext state changes
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro ao fazer login. Verifique suas credenciais.';
+      const errorMsg = messageFor(err, 'Erro ao fazer login. Verifique suas credenciais.');
       setGeneralError(errorMsg);
     } finally {
       setIsSubmitting(false);
