@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
@@ -132,7 +133,23 @@ public class TmdbEnrichmentJob {
             movieRepository.save(movie);
             return true;
 
+        } catch (HttpClientErrorException.NotFound e) {
+            // O TMDB não conhece este id: o filme foi removido, fundido com
+            // outro, ou o link do MovieLens está desatualizado. Não adianta
+            // tentar de novo — marcamos como processado para que saia da fila.
+            //
+            // Sem isto o filme falharia para sempre e, quando só restassem
+            // casos assim, o job giraria em falso a cada ciclo consumindo
+            // requisições à toa.
+            log.debug("TMDB não conhece '{}' (tmdb_id={}) — marcado como resolvido.",
+                    movie.getTitle(), movie.getTmdbId());
+            movie.setEnrichedAt(Instant.now());
+            movieRepository.save(movie);
+            return false;
+
         } catch (Exception e) {
+            // Falha transitória (rede, 429, 5xx): deixa pendente para a próxima
+            // rodada.
             log.debug("TMDB indisponível para '{}' (tmdb_id={}): {}",
                     movie.getTitle(), movie.getTmdbId(), e.getMessage());
             return false;
