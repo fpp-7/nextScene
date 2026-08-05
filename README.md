@@ -92,6 +92,10 @@ cd recommendation-engine && python -m pytest tests/ -q
 cd frontend && npm test && npm run typecheck
 ```
 
+Os testes do app rodam em dois projetos: `unit` para serviços e utilitários, e
+`components` para renderização. Para rodar só um deles:
+`npx jest --selectProjects components`.
+
 Os testes do backend sobem um PostgreSQL real via Testcontainers — as migrations
 são de fato exercitadas, inclusive as extensões `pg_trgm` e `unaccent`. Por isso
 o Docker precisa estar rodando.

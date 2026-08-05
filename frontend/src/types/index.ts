@@ -10,7 +10,10 @@ export interface User {
 
 // Auth
 export interface AuthResponse {
+  /** Access token JWT, curto. */
   token: string;
+  /** Token opaco de longa duração, usado para renovar sem novo login. */
+  refreshToken: string;
   user: User;
 }
 

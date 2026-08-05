@@ -24,7 +24,14 @@ public record UserResponse(
                 user.getId().toString(),
                 user.getName(),
                 user.getEmail(),
-                user.getGenresPreference(),
+                // Cópia, não a coleção do Hibernate: `genresPreference` é uma
+                // @ElementCollection lazy, e o DTO costuma ser serializado
+                // depois que a transação fecha. Passar a coleção original fazia
+                // o Jackson estourar LazyInitializationException fora da sessão.
+                // Copiar aqui força a carga enquanto a sessão ainda existe.
+                user.getGenresPreference() == null
+                        ? List.of()
+                        : List.copyOf(user.getGenresPreference()),
                 user.getInteractionCount()
         );
     }

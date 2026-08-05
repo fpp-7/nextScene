@@ -38,7 +38,7 @@ export const movieService = {
     return res.data;
   },
 
-  async getRecommendations(): Promise<{ aiPicks: Movie[]; similarUsers: Movie[] }> {
+  async getRecommendations(): Promise<{ aiPicks: Movie[]; byGenre: Movie[] }> {
     const res = await apiClient.get('/recommendations');
     return res.data;
   },

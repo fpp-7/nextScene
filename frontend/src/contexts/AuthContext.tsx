@@ -2,7 +2,9 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, R
 import { storage } from '../services/storage';
 import { User } from '../types';
 import { authService } from '../services/authService';
-import { setAuthToken, setUnauthorizedHandler } from '../services/api';
+import {
+  setAuthToken, setRefreshToken, setUnauthorizedHandler, setTokensRenewedHandler,
+} from '../services/api';
 
 interface AuthState {
   user: User | null;
@@ -32,6 +34,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'nextscene_auth_token';
 const USER_KEY = 'nextscene_user_data';
+const REFRESH_KEY = 'nextscene_refresh_token';
 const ONBOARDING_KEY = 'nextscene_onboarding_complete';
 
 const initialState: AuthState = {
@@ -82,18 +85,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const restoreToken = async () => {
       try {
         const token = await storage.getItem(TOKEN_KEY);
+        const refresh = await storage.getItem(REFRESH_KEY);
         const userData = await storage.getItem(USER_KEY);
         const onboardingDone = await storage.getItem(ONBOARDING_KEY);
 
         if (token && userData && !token.startsWith('mock-')) {
           const user = JSON.parse(userData);
           setAuthToken(token);
+          // Mesmo com o access token vencido, o refresh permite retomar a
+          // sessão de forma transparente na primeira requisição.
+          setRefreshToken(refresh);
           dispatch({
             type: 'RESTORE_TOKEN',
             payload: { user, token, hasCompletedOnboarding: onboardingDone === 'true' },
           });
         } else {
           await storage.removeItem(TOKEN_KEY);
+          await storage.removeItem(REFRESH_KEY);
           await storage.removeItem(USER_KEY);
           await storage.removeItem(ONBOARDING_KEY);
           dispatch({ type: 'SET_LOADING', payload: false });
@@ -114,7 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    */
   const clearSession = useCallback(async (keepOnboarding: boolean) => {
     setAuthToken(null);
+    setRefreshToken(null);
     await storage.removeItem(TOKEN_KEY);
+    await storage.removeItem(REFRESH_KEY);
     await storage.removeItem(USER_KEY);
     if (!keepOnboarding) {
       await storage.removeItem(ONBOARDING_KEY);
@@ -122,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'LOGOUT' });
   }, []);
 
-  // Token expirado/inválido → volta para a tela de login em vez de deixar o app
+  // Sessão irrecuperável → volta para a tela de login em vez de deixar o app
   // "logado" mostrando erro em todas as telas.
   useEffect(() => {
     setUnauthorizedHandler(() => {
@@ -131,9 +141,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [clearSession]);
 
-  const startSession = async (user: User, token: string) => {
+  // O interceptor renova os tokens sozinho; aqui eles são persistidos para que
+  // a sessão sobreviva ao fechamento do app.
+  useEffect(() => {
+    setTokensRenewedHandler((token, refresh) => {
+      storage.setItem(TOKEN_KEY, token);
+      storage.setItem(REFRESH_KEY, refresh);
+    });
+    return () => setTokensRenewedHandler(null);
+  }, []);
+
+  const startSession = async (user: User, token: string, refresh: string) => {
     setAuthToken(token);
+    setRefreshToken(refresh);
     await storage.setItem(TOKEN_KEY, token);
+    await storage.setItem(REFRESH_KEY, refresh);
     await storage.setItem(USER_KEY, JSON.stringify(user));
     dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token } });
 
@@ -147,12 +169,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await authService.login({ email, password });
-    await startSession(response.user, response.token);
+    await startSession(response.user, response.token, response.refreshToken);
   };
 
   const register = async (name: string, email: string, password: string) => {
     const response = await authService.register({ name, email, password });
-    await startSession(response.user, response.token);
+    await startSession(response.user, response.token, response.refreshToken);
   };
 
   const logout = async () => {

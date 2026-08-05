@@ -11,6 +11,20 @@ type Handler = {
   rejected?: (error: any) => any;
 };
 
+/**
+ * Restaura a variável de ambiente.
+ *
+ * Atribuir `undefined` a `process.env` grava a string "undefined", que vazaria
+ * para os testes seguintes como se fosse uma URL válida. Ausente é `delete`.
+ */
+function restore(value: string | undefined) {
+  if (value === undefined) {
+    delete process.env.EXPO_PUBLIC_API_URL;
+  } else {
+    process.env.EXPO_PUBLIC_API_URL = value;
+  }
+}
+
 /** Reimporta o módulo do zero, já que ele guarda o token em estado interno. */
 function loadApi() {
   let api: typeof import('../api');
@@ -36,7 +50,7 @@ describe('configuração', () => {
     const { apiClient } = loadApi();
 
     expect(apiClient.defaults.baseURL).toBe('https://api.exemplo.com/api');
-    process.env.EXPO_PUBLIC_API_URL = original;
+    restore(original);
   });
 
   it('cai para localhost quando a variável não está definida', () => {
@@ -49,7 +63,7 @@ describe('configuração', () => {
     expect(apiClient.defaults.baseURL).toBe('http://localhost:8080/api');
     expect(apiClient.defaults.baseURL).not.toContain('loca.lt');
 
-    process.env.EXPO_PUBLIC_API_URL = original;
+    restore(original);
   });
 
   it('define um timeout', () => {

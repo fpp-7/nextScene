@@ -33,7 +33,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(get("/api/recommendations").header("Authorization", bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiPicks").isArray())
-                .andExpect(jsonPath("$.similarUsers").isArray())
+                .andExpect(jsonPath("$.byGenre").isArray())
                 .andExpect(jsonPath("$.aiPicks.length()").value(
                         org.hamcrest.Matchers.greaterThan(0)));
     }
@@ -71,7 +71,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
 
         var json = objectMapper.readTree(response);
         var aiIds = idsOf(json.get("aiPicks"));
-        var genreIds = idsOf(json.get("similarUsers"));
+        var genreIds = idsOf(json.get("byGenre"));
 
         org.assertj.core.api.Assertions.assertThat(aiIds)
                 .as("sem a primeira trilha o teste não prova nada")
@@ -150,7 +150,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
         org.assertj.core.api.Assertions.assertThat(idsOf(body.get("aiPicks"), "id"))
                 .as("trilha do motor")
                 .doesNotContainAnyElementsOf(rated);
-        org.assertj.core.api.Assertions.assertThat(idsOf(body.get("similarUsers"), "id"))
+        org.assertj.core.api.Assertions.assertThat(idsOf(body.get("byGenre"), "id"))
                 .as("trilha por gênero")
                 .doesNotContainAnyElementsOf(rated);
     }

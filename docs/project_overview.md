@@ -145,8 +145,8 @@ Configurável por `MIN_RATINGS_FOR_RECOMMENDATION`.
 
 | Trilha | Origem |
 |---|---|
-| **Escolhas da IA** | Motor de recomendação |
-| **Dos Seus Gêneros** | Filmes bem avaliados nos gêneros que o usuário escolheu |
+| **Escolhas da IA** (`aiPicks`) | Motor de recomendação |
+| **Dos Seus Gêneros** (`byGenre`) | Filmes bem avaliados nos gêneros que o usuário escolheu |
 
 São sinais diferentes de propósito. Nenhuma das duas devolve filme que o usuário
 já avaliou — avaliação é insumo do algoritmo, não resultado dele.
@@ -208,6 +208,11 @@ erDiagram
 o UUID para caber num `number` do JavaScript, descartando metade dos bits — o id
 devolvido não servia para localizar o registro de volta e havia risco de colisão.
 
+**Sessão com refresh token.** O access token dura 30 minutos; o refresh, 30
+dias. Cada renovação consome o token apresentado e emite outro — um refresh vale
+uma única vez. Apresentar um já consumido é tratado como vazamento e derruba
+todos os tokens do usuário.
+
 **`title` e `title_pt` coexistem.** O motor trabalha com o título original, e a
 busca aceita as duas grafias, ignorando acentos: "The Godfather", "O Poderoso
 Chefão" e "Poderoso Chefao" chegam ao mesmo filme.
@@ -224,7 +229,8 @@ Tudo exige `Authorization: Bearer <token>`, exceto onde indicado.
 |---|---|---|
 | `POST` | `/api/auth/register` | Cadastro — público |
 | `POST` | `/api/auth/login` | Login — público, com rate limit por IP |
-| `POST` | `/api/auth/logout` | Sem efeito no servidor (JWT é stateless) |
+| `POST` | `/api/auth/refresh` | Renova a sessão — público, consome e rotaciona o refresh token |
+| `POST` | `/api/auth/logout` | Revoga os refresh tokens do usuário |
 | `GET` | `/api/users/me` | Perfil |
 | `PUT` | `/api/users/me` | Atualiza nome, e-mail, senha |
 | `GET` | `/api/users/me/stats` | Avaliados, assistidos, favoritos |
@@ -289,6 +295,4 @@ precisam de Redis.
 | Catálogo dessincronizado: backend tem 9.742 filmes, motor 80.505 | Sugestões fora do catálogo são descartadas, então a lista pode vir com menos itens |
 | `GET /api/v1/recommend/{user_id}` carrega o SVD sob demanda | A primeira chamada a esse endpoint leva mais de dois minutos e consome ~10 GB |
 | Chave TMDB exposta no histórico do Git | Precisa ser rotacionada |
-| Sem testes de componente no app | `react-test-renderer` não resolve com React 19; a cobertura é de serviços e cliente HTTP |
-| Cache e rate limit em memória | Impedem escalar horizontalmente sem Redis |
-| Sem refresh token | A sessão expira em 30 min e exige novo login |
+| Cache e rate limit em memória | Impedem escalar horizontalmente sem Redis. Sem impacto enquanto for uma instância só |

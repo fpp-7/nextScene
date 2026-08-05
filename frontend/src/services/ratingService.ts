@@ -22,7 +22,7 @@ export const ratingService = {
    */
   async submitColdStart(
     ratings: ColdStartRating[]
-  ): Promise<{ aiPicks: Movie[]; similarUsers: Movie[] } | null> {
+  ): Promise<{ aiPicks: Movie[]; byGenre: Movie[] } | null> {
     if (ratings.length === 0) return null;
 
     await apiClient.post('/ratings/batch', ratings);

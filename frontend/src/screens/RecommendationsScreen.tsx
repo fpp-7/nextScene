@@ -22,7 +22,7 @@ type Props = CompositeScreenProps<
 
 export function RecommendationsScreen({ navigation }: Props) {
   const [aiPicks, setAiPicks] = useState<Movie[]>([]);
-  const [similarUsers, setSimilarUsers] = useState<Movie[]>([]);
+  const [byGenre, setByGenre] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,7 +33,7 @@ export function RecommendationsScreen({ navigation }: Props) {
     try {
       const data = await movieService.getRecommendations();
       setAiPicks(data.aiPicks);
-      setSimilarUsers(data.similarUsers);
+      setByGenre(data.byGenre);
     } catch (err: any) {
       setError(messageFor(err, 'Erro ao carregar recomendações'));
     } finally {
@@ -125,7 +125,7 @@ export function RecommendationsScreen({ navigation }: Props) {
             lista da seção acima, cortada ao meio — o rótulo afirmava algo que a
             API não entregava. Agora o backend manda de fato outro sinal: filmes
             bem avaliados nos gêneros que o usuário escolheu. */}
-        {similarUsers.length > 0 && (
+        {byGenre.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.iconBox}>
@@ -139,7 +139,7 @@ export function RecommendationsScreen({ navigation }: Props) {
 
             <FlatList
               horizontal
-              data={similarUsers}
+              data={byGenre}
               keyExtractor={(movie) => `genre-${movie.id}`}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
