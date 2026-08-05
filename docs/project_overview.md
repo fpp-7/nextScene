@@ -119,8 +119,18 @@ pontua quem estava no conjunto de treino, e ninguém do app está. Permanece
 apenas por trás de `GET /api/v1/recommend/{user_id}`, útil para avaliar o modelo
 contra usuários do MovieLens.
 
-É ele o responsável pelos 2,3 GB do modelo completo — o `scikit-surprise`
-serializa o conjunto de treino inteiro dentro do pickle.
+É ele o responsável pelo peso: o `scikit-surprise` serializa o conjunto de
+treino inteiro dentro do pickle, e carregá-lo custa ~10 GB de RAM.
+
+Por isso ele e o DataFrame de avaliações passaram a ser **carregados sob
+demanda**, na primeira chamada àquele endpoint. O caminho do aplicativo não paga
+nada por eles:
+
+| | Antes | Depois |
+|---|---|---|
+| Startup do motor | 136 s | 2,3 s |
+| RAM em operação | 11,7 GB | 275 MB |
+| `hybrid_recommender.joblib` | 1,2 GB | 22 MB |
 
 ### Piso de popularidade
 
@@ -277,6 +287,7 @@ precisam de Redis.
 | Limitação | Impacto |
 |---|---|
 | Catálogo dessincronizado: backend tem 9.742 filmes, motor 80.505 | Sugestões fora do catálogo são descartadas, então a lista pode vir com menos itens |
+| `GET /api/v1/recommend/{user_id}` carrega o SVD sob demanda | A primeira chamada a esse endpoint leva mais de dois minutos e consome ~10 GB |
 | Chave TMDB exposta no histórico do Git | Precisa ser rotacionada |
 | Sem testes de componente no app | `react-test-renderer` não resolve com React 19; a cobertura é de serviços e cliente HTTP |
 | Cache e rate limit em memória | Impedem escalar horizontalmente sem Redis |

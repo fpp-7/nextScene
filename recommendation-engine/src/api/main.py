@@ -31,20 +31,41 @@ state: dict = {}
 async def lifespan(app: FastAPI):
     """Carrega modelos e dados na inicialização da API."""
     logger.info("🎬 NextScene API iniciando...")
-    state["hybrid"]  = HybridRecommender.load()
-    state["movies"]  = load_movies()
-    state["ratings"] = load_ratings()
+    hybrid = HybridRecommender.load()
+    state["hybrid"] = hybrid
+    state["movies"] = load_movies()
 
     # Piso de popularidade: sem ele, o content-based devolve a cauda longa do
     # catálogo — filmes com 5 avaliações batem quase 1.0 de similaridade porque
     # seu vetor TF-IDF é praticamente só o one-hot de gênero. Ver config.py.
-    counts = state["ratings"].groupby("movieId").size()
-    eligible = counts[counts >= MIN_RATINGS_FOR_RECOMMENDATION].index
-    state["hybrid"].cb.set_eligible_movies(eligible)
+    #
+    # O conjunto elegível vem do índice do item-item, que já aplicou o mesmo
+    # piso no treino. Antes era recalculado aqui a partir do DataFrame de 32
+    # milhões de avaliações, o que obrigava a carregá-lo no startup.
+    if hybrid.ii is not None:
+        hybrid.cb.set_eligible_movies(hybrid.ii.movie_ids)
+    else:
+        counts = _ratings().groupby("movieId").size()
+        hybrid.cb.set_eligible_movies(
+            counts[counts >= MIN_RATINGS_FOR_RECOMMENDATION].index)
 
     logger.info("✅ Modelos carregados.")
     yield
     state.clear()
+
+
+def _ratings() -> pd.DataFrame:
+    """
+    O DataFrame de avaliações, carregado sob demanda.
+
+    Só `recommend()` — o endpoint de avaliação do modelo com usuários do
+    MovieLens — precisa dele. Carregá-lo no startup custava ~1 GB de memória e
+    vários segundos no caminho que nenhum usuário do aplicativo percorre.
+    """
+    if "ratings" not in state:
+        logger.info("Carregando o dataset de avaliações sob demanda...")
+        state["ratings"] = load_ratings()
+    return state["ratings"]
 
 
 app = FastAPI(
@@ -158,7 +179,7 @@ def recommend_for_user(
     """
     hybrid:  HybridRecommender = state["hybrid"]
     movies:  pd.DataFrame       = state["movies"]
-    ratings: pd.DataFrame       = state["ratings"]
+    ratings: pd.DataFrame       = _ratings()
 
     try:
         recs = hybrid.recommend(

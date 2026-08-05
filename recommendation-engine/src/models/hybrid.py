@@ -53,13 +53,40 @@ class HybridRecommender:
         recs = recommender.recommend_cold_start(liked_movie_ids=[1,2,3], top_n=10)
     """
 
-    def __init__(self, content_model: ContentBasedModel, collaborative_model: CollaborativeModel,
+    def __init__(self, content_model: ContentBasedModel,
+                 collaborative_model: CollaborativeModel | None = None,
                  item_item_model=None):
         self.cb = content_model
-        self.cf = collaborative_model
+        self._cf = collaborative_model
         # Opcional para manter compatibilidade com modelos serializados antes de
         # o item-item existir; nesses casos o content-based segue respondendo.
         self.ii = item_item_model
+
+    # ─── Modelo colaborativo por SVD, carregado sob demanda ───────────────────
+
+    @property
+    def cf(self) -> CollaborativeModel:
+        """
+        O SVD, carregado na primeira vez que for realmente usado.
+
+        Ele só atende `recommend()`, que serve usuários do MovieLens para
+        avaliação do modelo — os usuários do aplicativo passam pelo item-item.
+        Ainda assim era carregado sempre, e é ele o responsável por praticamente
+        todo o peso: o `scikit-surprise` serializa o conjunto de treino inteiro,
+        o que levava o motor a 11,9 GB de RAM e 136s de startup.
+
+        Sob demanda, o caminho do aplicativo não paga nada por isso.
+        """
+        if self._cf is None:
+            logger.info("Carregando o SVD sob demanda (primeira chamada a recommend)...")
+            self._cf = CollaborativeModel.load()
+        return self._cf
+
+    def __getstate__(self):
+        """Serializa sem o SVD — ele já é salvo em collaborative.joblib."""
+        state = self.__dict__.copy()
+        state["_cf"] = None
+        return state
 
     # ─── Recomendação Principal ────────────────────────────────────────────────
 

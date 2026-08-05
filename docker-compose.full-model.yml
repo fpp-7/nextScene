@@ -7,15 +7,13 @@
 #
 # Por que é um override, e não o padrão
 # -------------------------------------
-# O modelo treinado sobre o ml-latest completo (32 milhões de avaliações) ocupa
-# 2,3 GB: o SVD do scikit-surprise carrega o trainset inteiro dentro do pickle.
-# Assar isso na imagem daria ~4 GB e 16 minutos de build, e ainda exigiria
-# baixar 335 MB de dataset durante o build.
+# Treinar sobre o ml-latest exige baixar 335 MB de dataset e alguns minutos de
+# processamento — custo que não faz sentido impor a todo build. Aqui os
+# artefatos entram por volume, a partir do que já foi treinado na máquina.
 #
-# Aqui os artefatos entram por volume, a partir do que já foi treinado na
-# máquina. Isso mantém a imagem padrão pequena e auto-suficiente — quem clonar o
-# repositório sem esses arquivos continua conseguindo subir a pilha com o modelo
-# small, gerado pelo scripts/bootstrap.py.
+# A imagem padrão continua pequena e auto-suficiente: quem clonar o repositório
+# sem esses arquivos sobe a pilha com o modelo small, gerado pelo
+# scripts/bootstrap.py.
 #
 # Pré-requisito: ter rodado localmente
 #   cd recommendation-engine
@@ -26,13 +24,9 @@ services:
     environment:
       # Faz o config.py apontar para data/raw/ml-latest e data/processed/ml-latest
       ENV: production
-      # Cada worker carrega ~2,5 GB (modelo + DataFrame de ratings). Com 15 GB
-      # disponíveis ao Docker, 1 worker é o ajuste seguro para o modelo completo.
-      WORKERS: 1
+      # O SVD e o DataFrame de avaliações passaram a ser carregados sob
+      # demanda, então cada worker ocupa ~275 MB em vez dos 11,7 GB de antes.
+      WORKERS: 2
     volumes:
       - ./recommendation-engine/models_saved:/app/models_saved:ro
       - ./recommendation-engine/data:/app/data:ro
-    healthcheck:
-      # Carregar 1,2 GB de pickle mais o DataFrame leva bem mais que os 30s do
-      # start_period padrão.
-      start_period: 180s

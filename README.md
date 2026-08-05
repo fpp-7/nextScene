@@ -126,12 +126,12 @@ cd recommendation-engine && ENV=production python -m src.train_pipeline --skip-t
 docker compose -f docker-compose.yml -f docker-compose.full-model.yml up -d
 ```
 
-O override monta os artefatos por volume em vez de assar na imagem. Motivo: o
-SVD colaborativo ocupa 2,3 GB porque o `scikit-surprise` serializa o conjunto de
-treino inteiro. **Esse caminho exige ~12 GB de RAM disponível ao Docker.**
+O override monta os artefatos por volume porque treinar sobre o ml-latest exige
+baixar 335 MB de dataset — custo que não faz sentido impor a todo build.
 
-O modelo item-item, que é quem de fato atende os usuários, ocupa apenas 6 MB —
-veja [docs/project_overview.md](docs/project_overview.md#o-motor-de-recomendação).
+O motor carrega ~275 MB: o SVD e o DataFrame de avaliações só entram em memória
+se o endpoint de avaliação do modelo for chamado. Veja
+[docs/project_overview.md](docs/project_overview.md#o-motor-de-recomendação).
 
 ---
 
@@ -148,9 +148,10 @@ aparelho. Troque pelo IP da máquina na LAN.
 em lotes, priorizando os mais bem avaliados. Leva algumas horas para o catálogo
 todo. Sem `TMDB_API_KEY`, nunca acontece.
 
-**Container do motor reiniciando com o modelo completo.** Falta RAM. Aumente o
-limite do Docker ou volte ao modelo padrão (`docker compose up -d` sem o
-override).
+**Container do motor reiniciando.** Verifique os logs com
+`docker compose logs recommendation-engine`. Se os modelos não estiverem no
+lugar, rode o pipeline de treino ou volte ao padrão (`docker compose up -d` sem
+o override).
 
 ---
 

@@ -44,6 +44,17 @@ public class TmdbEnrichmentJob {
     @Value("${app.tmdb.enabled:true}")
     private boolean enabled;
 
+    /**
+     * Ciclos ignorados depois de encontrar a fila vazia.
+     * <p>
+     * O intervalo curto existe para drenar a carga inicial do catálogo. Depois
+     * disso, consultar o banco a cada 20 segundos para não achar nada é ruído.
+     * Com 90 ciclos, a verificação passa a ocorrer a cada ~30 minutos.
+     */
+    private static final int IDLE_BACKOFF_CYCLES = 90;
+
+    private int idleCycles = 0;
+
     @Scheduled(
             initialDelayString = "${app.tmdb.initial-delay-ms:30000}",
             fixedDelayString = "${app.tmdb.interval-ms:60000}"
@@ -53,8 +64,17 @@ public class TmdbEnrichmentJob {
             return;
         }
 
+        // Com o catálogo já processado, não há por que consultar o banco a cada
+        // ciclo curto. O intervalo é dimensionado para a carga inicial; depois
+        // dela, só interessa capturar filmes novos, o que é raro.
+        if (idleCycles > 0) {
+            idleCycles--;
+            return;
+        }
+
         List<Movie> pending = movieRepository.findPendingEnrichment(PageRequest.of(0, batchSize));
         if (pending.isEmpty()) {
+            idleCycles = IDLE_BACKOFF_CYCLES;
             return;
         }
 
