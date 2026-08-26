@@ -8,6 +8,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -61,8 +63,8 @@ public class AuthService {
 
     /** Encerra a sessão de verdade: o refresh token deixa de valer no servidor. */
     @Transactional
-    public void logout(AppUser user) {
-        refreshTokenService.revokeAll(user);
+    public void logout(UUID userId) {
+        refreshTokenService.revokeAll(userId);
     }
 
     private AuthResponse sessionFor(AppUser user) {

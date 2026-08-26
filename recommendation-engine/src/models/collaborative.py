@@ -68,11 +68,13 @@ class CollaborativeModel:
         dataset = Dataset.load_from_df(ratings[["userId", "movieId", "rating"]], reader)
 
         results = cross_validate(self.algo, dataset, measures=["RMSE", "MAE"], cv=cv_folds, verbose=True)
+        # float() nativo, não numpy.float64: json.dumps (usado no histórico de
+        # métricas do re-treino) não serializa tipos numpy sem um encoder custom.
         return {
-            "rmse_mean": results["test_rmse"].mean(),
-            "rmse_std":  results["test_rmse"].std(),
-            "mae_mean":  results["test_mae"].mean(),
-            "mae_std":   results["test_mae"].std(),
+            "rmse_mean": float(results["test_rmse"].mean()),
+            "rmse_std":  float(results["test_rmse"].std()),
+            "mae_mean":  float(results["test_mae"].mean()),
+            "mae_std":   float(results["test_mae"].std()),
         }
 
     # ─── Inferência ───────────────────────────────────────────────────────────

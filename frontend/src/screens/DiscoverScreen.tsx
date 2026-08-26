@@ -4,7 +4,7 @@ import {
   useWindowDimensions, RefreshControl, Linking, ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Search, Play } from 'lucide-react-native';
+import { Search, Play, RefreshCw } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { messageFor } from '../services/errors';
 import { colors } from '../theme/colors';
@@ -50,6 +50,10 @@ export function DiscoverScreen({ navigation }: Props) {
   const [recent, setRecent] = useState<Movie[]>([]);
   const [topRated, setTopRated] = useState<Movie[]>([]);
   const [shelvesLoading, setShelvesLoading] = useState(true);
+  // Página das prateleiras. Atualizar avança para a próxima: sem isso, o botão
+  // rebuscava a página 0 e devolvia exatamente os mesmos filmes — quem não
+  // gostou de nenhum ficava presos nos mesmos 20 títulos.
+  const [shelfPage, setShelfPage] = useState(0);
 
   const [movies, setMovies] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,27 +73,42 @@ export function DiscoverScreen({ navigation }: Props) {
 
   // ─── Prateleiras ──────────────────────────────────────────────────────────
 
-  const loadShelves = useCallback(async () => {
+  /**
+   * Carrega as três prateleiras numa dada página.
+   *
+   * Devolve `false` quando a página pedida veio vazia — sinal de que o catálogo
+   * acabou naquele critério, e quem chamou deve voltar ao início.
+   */
+  const loadShelves = useCallback(async (pageToLoad: number) => {
     setShelvesLoading(true);
     try {
       const [pop, rec, top] = await Promise.all([
-        movieService.getMovies(undefined, 0, 'popular'),
-        movieService.getMovies(undefined, 0, 'recent'),
-        movieService.getMovies(undefined, 0, 'rating'),
+        movieService.getMovies(undefined, pageToLoad, 'popular'),
+        movieService.getMovies(undefined, pageToLoad, 'recent'),
+        movieService.getMovies(undefined, pageToLoad, 'rating'),
       ]);
+
+      // Todas vazias: fim do catálogo. Não sobrescreve o que está na tela, para
+      // não deixar o usuário com três prateleiras em branco.
+      if (pop.length === 0 && rec.length === 0 && top.length === 0) {
+        return false;
+      }
+
       setPopular(pop);
       setRecent(rec);
       setTopRated(top);
       setError(null);
+      return true;
     } catch (err: any) {
       setError(messageFor(err, 'Erro ao carregar filmes'));
+      return true; // o erro já está na tela; não faz sentido tentar a página 0
     } finally {
       setShelvesLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadShelves();
+    loadShelves(0);
     movieService.getFeaturedMovie().then(setFeatured).catch(() => {
       // Destaque é opcional — sua ausência não deve bloquear a tela.
     });
@@ -157,7 +176,22 @@ export function DiscoverScreen({ navigation }: Props) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await (isBrowsing ? loadFirstPage(searchQuery, genreParam) : loadShelves());
+
+    if (isBrowsing) {
+      await loadFirstPage(searchQuery, genreParam);
+    } else {
+      // Avança uma página a cada atualização; ao chegar ao fim do catálogo,
+      // recomeça do topo em vez de deixar a tela vazia.
+      const next = shelfPage + 1;
+      const loaded = await loadShelves(next);
+      if (loaded) {
+        setShelfPage(next);
+      } else {
+        await loadShelves(0);
+        setShelfPage(0);
+      }
+    }
+
     setRefreshing(false);
   };
 
@@ -180,7 +214,25 @@ export function DiscoverScreen({ navigation }: Props) {
   const header = (
     <>
       <View style={styles.header}>
-        <Text style={styles.title}>Descobrir</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Descobrir</Text>
+          {/* Botão explícito além do "puxar para atualizar": na web não há gesto
+              de puxar, então sem ele não havia como trocar a lista. */}
+          {!isBrowsing && (
+            <TouchableOpacity
+              onPress={onRefresh}
+              disabled={refreshing || shelvesLoading}
+              style={styles.refreshBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Mostrar outros filmes"
+            >
+              <RefreshCw
+                size={20}
+                color={refreshing || shelvesLoading ? colors.mutedForeground : colors.primary}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.searchBar}>
           <Search size={20} color={colors.mutedForeground} />
           <TextInput
@@ -197,33 +249,43 @@ export function DiscoverScreen({ navigation }: Props) {
 
       {!isBrowsing && featured && (
         <View style={styles.featuredSection}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => openMovie(featured.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`Destaque da semana: ${featured.title}. Abrir detalhes`}
-          >
-            <View style={[styles.featuredImageContainer, { height: Math.min(width * 1.1, 460) }]}>
+          {/* O card e o botão de trailer são irmãos, não aninhados: na web o
+              TouchableOpacity vira <button>, e um <button> dentro de outro é
+              HTML inválido — o React reclamava de hydration error e o clique
+              no card navegava e voltava na mesma hora. */}
+          <View style={[styles.featuredImageContainer, { height: Math.min(width * 1.1, 460) }]}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={0.9}
+              onPress={() => openMovie(featured.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Destaque da semana: ${featured.title}. Abrir detalhes`}
+            >
               <ImageFallback source={{ uri: featured.poster }} style={styles.featuredImage} />
               <View style={styles.featuredOverlay} />
-              <View style={styles.featuredContent}>
-                <Text style={styles.featuredTag}>Destaque da Semana</Text>
-                <Text style={styles.featuredTitle} numberOfLines={2}>{featured.title}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.featuredContent} pointerEvents="box-none">
+              <Text style={styles.featuredTag}>Destaque da Semana</Text>
+              <Text style={styles.featuredTitle} numberOfLines={2}>{featured.title}</Text>
+              {/* Mesmo raciocínio do botão de trailer em MovieDetailsScreen:
+                  sem trailerKey, o TMDB ainda não achou o vídeo — some em vez
+                  de cair numa busca que pode trazer qualquer coisa. */}
+              {featured.trailerKey && (
                 <TouchableOpacity
                   style={styles.playButton}
                   onPress={() => {
-                    const query = encodeURIComponent(`${featured.title} trailer`);
-                    Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
+                    Linking.openURL(`https://www.youtube.com/watch?v=${featured.trailerKey}`);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Buscar trailer de ${featured.title} no YouTube`}
+                  accessibilityLabel={`Assistir trailer de ${featured.title}`}
                 >
                   <Play size={20} color={colors.primaryForeground} fill={colors.primaryForeground} />
-                  <Text style={styles.playText}>Buscar Trailer</Text>
+                  <Text style={styles.playText}>Assistir Trailer</Text>
                 </TouchableOpacity>
-              </View>
+              )}
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -253,7 +315,7 @@ export function DiscoverScreen({ navigation }: Props) {
   if (error && !isBrowsing) {
     return (
       <SafeAreaView style={styles.container}>
-        <ErrorMessage message={error} onRetry={loadShelves} />
+        <ErrorMessage message={error} onRetry={() => loadShelves(shelfPage)} />
       </SafeAreaView>
     );
   }
@@ -344,7 +406,9 @@ const styles = StyleSheet.create({
   listContent: { paddingBottom: 24, paddingHorizontal: 24 },
   columnWrapper: { justifyContent: 'space-between' },
   header: { paddingTop: 16, marginBottom: 24, paddingRight: 24 },
-  title: { color: colors.white, fontSize: 32, fontWeight: '700', marginBottom: 16 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  title: { color: colors.white, fontSize: 32, fontWeight: '700' },
+  refreshBtn: { padding: 10, borderRadius: 12, backgroundColor: colors.secondary },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.inputBackground, borderRadius: 14, paddingHorizontal: 16, height: 50, gap: 12 },
   searchInput: { flex: 1, color: colors.white, fontSize: 16 },
   featuredSection: { marginBottom: 28, paddingRight: 24 },

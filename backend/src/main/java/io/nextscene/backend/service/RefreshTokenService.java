@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 /**
  * Emite, valida e revoga refresh tokens.
@@ -93,7 +94,7 @@ public class RefreshTokenService {
             // vazamento e derruba a sessão inteira.
             log.warn("Refresh token reutilizado (usuário {}) — revogando todos os tokens.",
                     stored.getUser().getId());
-            repository.revokeAllForUser(stored.getUser(), Instant.now());
+            repository.revokeAllForUser(stored.getUser().getId(), Instant.now());
             throw new InvalidRefreshTokenException();
         }
 
@@ -110,9 +111,9 @@ public class RefreshTokenService {
 
     /** Encerra a sessão em todos os dispositivos do usuário. */
     @Transactional
-    public void revokeAll(AppUser user) {
-        int revoked = repository.revokeAllForUser(user, Instant.now());
-        log.debug("{} refresh tokens revogados para o usuário {}.", revoked, user.getId());
+    public void revokeAll(UUID userId) {
+        int revoked = repository.revokeAllForUser(userId, Instant.now());
+        log.debug("{} refresh tokens revogados para o usuário {}.", revoked, userId);
     }
 
     /**

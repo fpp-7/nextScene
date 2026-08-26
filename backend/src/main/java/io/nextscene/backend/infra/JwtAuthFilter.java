@@ -1,7 +1,5 @@
 package io.nextscene.backend.infra;
 
-import io.nextscene.backend.model.AppUser;
-import io.nextscene.backend.repository.AppUserRepository;
 import io.nextscene.backend.service.JwtService;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import jakarta.servlet.FilterChain;
@@ -23,7 +21,6 @@ import java.util.UUID;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final AppUserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -43,14 +40,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (decoded != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UUID userId = UUID.fromString(decoded.getSubject());
-                AppUser user = userRepository.findById(userId).orElse(null);
+                String email = decoded.getClaim("email").asString();
+                var principal = new AuthenticatedUser(userId, email);
 
-                if (user != null) {
-                    var authentication = new UsernamePasswordAuthenticationToken(
-                            user, null, List.of()
-                    );
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
+                var authentication = new UsernamePasswordAuthenticationToken(
+                        principal, null, List.of()
+                );
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (IllegalArgumentException ignored) {
                 // Invalid UUID in token
             }

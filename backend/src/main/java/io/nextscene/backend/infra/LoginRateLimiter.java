@@ -1,49 +1,74 @@
 package io.nextscene.backend.infra;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Limita tentativas de login por IP, em janela deslizante simples.
+ * Limita tentativas de login por IP, em janela deslizante simples, com
+ * contador compartilhado no Redis.
  * <p>
- * Sem isso, {@code /api/auth/login} aceitava força bruta ilimitada: não há
+ * Sem isso, {@code /api/v1/auth/login} aceitava força bruta ilimitada: não há
  * bloqueio de conta, captcha nem backoff, e a política de senha exige apenas 6
  * caracteres.
  * <p>
- * Limitação conhecida: o estado é por instância. Com mais de um nó do backend,
- * o limite efetivo é multiplicado pelo número de nós — para valer de verdade em
- * produção, precisa de um contador compartilhado (Redis).
+ * Antes o contador era um {@code Caffeine} em memória: com mais de um nó do
+ * backend, o limite efetivo multiplicava pelo número de nós, porque cada
+ * requisição podia cair num nó diferente com seu próprio contador zerado.
+ * Com Redis, todos os nós compartilham a mesma contagem por IP.
+ * <p>
+ * <b>Se o Redis cair:</b> a tentativa é permitida e o incidente é logado em
+ * {@code WARN}, não bloqueado. Derrubar o login inteiro porque o cache caiu
+ * trocaria um problema de segurança por uma indisponibilidade — pior para
+ * todo mundo, não só para quem estivesse de fato atacando.
  */
+@Slf4j
 @Component
 public class LoginRateLimiter {
 
-    private final Cache<String, AtomicInteger> attempts;
+    private static final String KEY_PREFIX = "nextscene:login-attempts:";
+
+    private final StringRedisTemplate redis;
     private final int maxAttempts;
+    private final Duration window;
 
     public LoginRateLimiter(
+            StringRedisTemplate redis,
             @Value("${app.security.login.max-attempts:10}") int maxAttempts,
             @Value("${app.security.login.window-minutes:15}") long windowMinutes
     ) {
+        this.redis = redis;
         this.maxAttempts = maxAttempts;
-        this.attempts = Caffeine.newBuilder()
-                .expireAfterWrite(Duration.ofMinutes(windowMinutes))
-                .maximumSize(100_000)
-                .build();
+        this.window = Duration.ofMinutes(windowMinutes);
     }
 
     /** Registra uma tentativa e diz se ela ainda está dentro do limite. */
     public boolean tryConsume(String clientKey) {
-        AtomicInteger counter = attempts.get(clientKey, k -> new AtomicInteger());
-        return counter.incrementAndGet() <= maxAttempts;
+        String key = KEY_PREFIX + clientKey;
+        try {
+            Long count = redis.opsForValue().increment(key);
+            // TTL só na primeira tentativa da janela — reaplicar a cada chamada
+            // faria a janela deslizar para sempre e o limite nunca valeria.
+            if (count != null && count == 1L) {
+                redis.expire(key, window);
+            }
+            return count == null || count <= maxAttempts;
+        } catch (Exception e) {
+            log.warn("Redis indisponível para rate limit de login (chave {}) — permitindo a tentativa.",
+                    clientKey, e);
+            return true;
+        }
     }
 
     /** Zera o contador — chamado após um login bem-sucedido. */
     public void reset(String clientKey) {
-        attempts.invalidate(clientKey);
+        try {
+            redis.delete(KEY_PREFIX + clientKey);
+        } catch (Exception e) {
+            log.warn("Redis indisponível para resetar o rate limit de login (chave {}).", clientKey, e);
+        }
     }
 }

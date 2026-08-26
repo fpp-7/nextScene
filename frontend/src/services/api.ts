@@ -5,7 +5,7 @@ import axios from 'axios';
  * (veja `.env.example`). Em dev com dispositivo físico, use o IP da sua máquina
  * na LAN — `localhost` aponta para o próprio aparelho.
  */
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080/api/v1';
 
 if (__DEV__) {
   console.log(`[api] baseURL = ${BASE_URL}`);

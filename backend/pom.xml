@@ -98,6 +98,20 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
+		<!-- Documenta o contrato da API (/v3/api-docs, /swagger-ui.html). O
+		     Swagger UI é desligado em produção via springdoc.swagger-ui.enabled. -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.0.3</version>
+		</dependency>
+		<!-- Cache do catálogo e rate limit de login compartilhados entre instâncias.
+		     Antes eram Caffeine/contador em memória: cada nó tinha seu próprio
+		     estado, e o limite de login efetivo multiplicava por nó. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.projectlombok</groupId>
@@ -142,6 +156,14 @@
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Redis real para os testes de cache e rate limit, no mesmo espírito do
+		     Postgres via Testcontainers acima: comportamento real, não simulado. -->
+		<dependency>
+			<groupId>com.redis</groupId>
+			<artifactId>testcontainers-redis</artifactId>
+			<version>2.2.4</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>

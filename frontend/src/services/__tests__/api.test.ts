@@ -60,7 +60,7 @@ describe('configuração', () => {
     const { apiClient } = loadApi();
 
     // Regressão: a URL era um túnel localtunnel fixo no código, que expira.
-    expect(apiClient.defaults.baseURL).toBe('http://localhost:8080/api');
+    expect(apiClient.defaults.baseURL).toBe('http://localhost:8080/api/v1');
     expect(apiClient.defaults.baseURL).not.toContain('loca.lt');
 
     restore(original);

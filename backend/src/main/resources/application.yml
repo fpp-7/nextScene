@@ -2,6 +2,15 @@ spring:
   application:
     name: nextscene-backend
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # Timeouts curtos: se o Redis cair, o app deve falhar rápido e degradar
+      # (ver CacheConfig e LoginRateLimiter), não travar threads esperando.
+      connect-timeout: 1000
+      timeout: 1000
+
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nextscene}
     username: ${DB_USER:postgres}
@@ -95,3 +104,13 @@ app:
 logging:
   level:
     io.nextscene.backend: ${LOG_LEVEL:INFO}
+
+springdoc:
+  # Documenta o contrato em /v3/api-docs e /swagger-ui.html. Ligado por padrão
+  # porque o padrão aqui é dev (docker-compose local) — em produção, desligue
+  # com SWAGGER_UI_ENABLED=false: expor o mapa completo da API a quem não
+  # precisa dele é reconhecimento de graça.
+  swagger-ui:
+    enabled: ${SWAGGER_UI_ENABLED:true}
+  api-docs:
+    enabled: ${SWAGGER_UI_ENABLED:true}

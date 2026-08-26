@@ -13,6 +13,22 @@ export const ratingService = {
   },
 
   /**
+   * Avaliação de um único filme, sem baixar o histórico inteiro para filtrar
+   * no cliente. `null` cobre tanto "nunca avaliado" quanto qualquer outra
+   * falha silenciosa (ex.: sessão expirada) — quem chama trata os dois como
+   * "sem avaliação".
+   */
+  async getMyRatingFor(movieId: number): Promise<RatingEntry | null> {
+    try {
+      const res = await apiClient.get<RatingEntry>(`/ratings/${movieId}`);
+      return res.data;
+    } catch (err: any) {
+      if (err?.response?.status === 404) return null;
+      throw err;
+    }
+  },
+
+  /**
    * Conclui o onboarding.
    *
    * As avaliações são **gravadas** antes de pedir as recomendações. Antes elas

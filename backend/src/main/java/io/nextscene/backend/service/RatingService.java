@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -64,6 +65,25 @@ public class RatingService {
                         r.getAvaliacao().name().toLowerCase()
                 ))
                 .toList();
+    }
+
+    /**
+     * Avaliação de um filme específico — sem baixar o histórico inteiro.
+     * <p>
+     * Antes a tela de detalhes chamava {@link #getMyRatings} e filtrava no
+     * cliente, o que baixava (e carregava, via {@code @EntityGraph}) toda a
+     * lista de avaliações do usuário só para achar uma.
+     */
+    @Transactional(readOnly = true)
+    public Optional<RatingResponse> getMyRatingFor(UUID userId, Integer movieId) {
+        AppUser user = userService.findById(userId);
+        Movie movie = movieService.findEntityByMovieId(movieId);
+        return ratingRepository.findByUserAndMovie(user, movie)
+                .map(r -> new RatingResponse(
+                        r.getId().toString(),
+                        movie.getMovieId(),
+                        r.getAvaliacao().name().toLowerCase()
+                ));
     }
 
     @Transactional

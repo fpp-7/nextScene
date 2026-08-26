@@ -26,7 +26,6 @@ graph TB
         FLY["Flyway"]
         FEIGN["OpenFeign + Resilience4j"]
         JOB["Job de enriquecimento TMDB"]
-        CACHE["Cache Caffeine"]
     end
 
     subgraph RE["🐍 Motor — FastAPI · Python 3.11"]
@@ -36,11 +35,13 @@ graph TB
     end
 
     DB[("PostgreSQL 16")]
+    REDIS[("Redis<br/>cache + rate limit")]
     TMDB["TMDB API"]
 
     APP -->|"REST + Bearer JWT"| BE
     BE -->|"POST /recommend/history"| RE
     BE --- DB
+    BE --- REDIS
     JOB -.-> TMDB
     RE --- DATA[("MovieLens<br/>models_saved/")]
 ```
@@ -67,7 +68,7 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Motor
 
-    App->>Backend: GET /api/recommendations
+    App->>Backend: GET /api/v1/recommendations
     Backend->>DB: histórico de avaliações do usuário
     DB-->>Backend: [(movieId, nota), ...]
     Backend->>Motor: POST /api/v1/recommend/history
@@ -151,6 +152,40 @@ Configurável por `MIN_RATINGS_FOR_RECOMMENDATION`.
 São sinais diferentes de propósito. Nenhuma das duas devolve filme que o usuário
 já avaliou — avaliação é insumo do algoritmo, não resultado dele.
 
+**As duas passam por `withVariety`.** As quatro primeiras posições saem sempre
+(são as de maior pontuação); as seis restantes são sorteadas de um conjunto
+maior de candidatos. Sem isso, ambas as trilhas eram determinísticas e o botão
+de atualizar devolvia a lista idêntica — quem não gostava de nenhuma sugestão
+não tinha como pedir outras.
+
+### As prateleiras da tela "Descobrir"
+
+O Descobrir não passa pelo motor: é curadoria sobre o catálogo do Postgres, com
+três faixas horizontais, cada uma com um critério de ordenação declarado no
+rótulo.
+
+| Prateleira | `sort` | Ordenação |
+|---|---|---|
+| **Em Alta** | `popular` | Mais avaliados no TMDB (`vote_count`) |
+| **Mais Recentes** | `recent` | Ano decrescente; empate pelos mais vistos |
+| **Bem Avaliados** | `rating` | Melhor nota média |
+
+Antes existia uma grade única ordenada por nota, rotulada "Em Alta" — que na
+prática eram os melhores filmes de todos os tempos, sempre na mesma ordem. O
+rótulo dizia uma coisa e a tela entregava outra. Nota média mede qualidade
+percebida, não alcance.
+
+Buscar ou filtrar por gênero troca as prateleiras por uma grade paginada,
+ordenada por `popular`. Filmes ainda não enriquecidos têm `vote_count` nulo e vão
+para o fim de todas as ordenações (`NULLS LAST`), para não encabeçar a lista sem
+pôster.
+
+**O botão de atualizar avança a página das três prateleiras**, em vez de
+recarregar a mesma. Como a ordenação é estática, rebuscar a página 0 devolvia os
+mesmos vinte títulos e o botão parecia não fazer nada. Ao chegar ao fim do
+catálogo, volta ao início. Existe como botão visível, e não só como "puxar para
+atualizar": na web não há gesto de puxar.
+
 ---
 
 ## Modelo de dados
@@ -180,7 +215,17 @@ erDiagram
         text synopsis
         text cast_list
         double rating
+        int vote_count "quantos avaliaram no TMDB"
+        string trailer_key "chave do vídeo no YouTube"
         timestamptz enriched_at
+    }
+    REFRESH_TOKEN {
+        uuid id PK
+        uuid user_id FK
+        string token_hash "SHA-256, único"
+        timestamptz expires_at
+        timestamptz created_at
+        timestamptz revoked_at
     }
     RATING {
         uuid id PK
@@ -196,10 +241,17 @@ erDiagram
         uuid movie_id FK
         timestamptz added_at
     }
+    MOVIELENS_USER_MAP {
+        uuid app_user_id PK "FK para app_user"
+        bigint ml_user_id UK "a partir de 1.000.000"
+        timestamptz created_at
+    }
 
+    APP_USER ||--o{ REFRESH_TOKEN : "renova com"
     APP_USER ||--o{ APP_USER_GENRES_PREFERENCE : "prefere"
     APP_USER ||--o{ RATING : "avalia"
     APP_USER ||--o{ WATCH_LIST : "salva"
+    APP_USER ||--o| MOVIELENS_USER_MAP : "mapeado para"
     MOVIE ||--o{ RATING : "recebe"
     MOVIE ||--o{ WATCH_LIST : "está em"
 ```
@@ -213,9 +265,37 @@ dias. Cada renovação consome o token apresentado e emite outro — um refresh 
 uma única vez. Apresentar um já consumido é tratado como vazamento e derruba
 todos os tokens do usuário.
 
+O refresh é um token opaco guardado no banco, não outro JWT: JWT é auto-contido
+e irrevogável sem lista de bloqueio, e é justamente o refresh que dá acesso de
+longa duração. Só o hash SHA-256 é armazenado — o token é aleatório e de alta
+entropia, então não há o que adivinhar por força bruta que justifique um hash
+lento.
+
+**`vote_count` separa popularidade de nota.** Média mede qualidade percebida,
+não alcance: um documentário com 60 votos pode ter média 9,0 sem que ninguém
+esteja assistindo. O campo vem do TMDB no mesmo payload da sinopse e do pôster,
+e é o que sustenta a prateleira "Em Alta".
+
 **`title` e `title_pt` coexistem.** O motor trabalha com o título original, e a
 busca aceita as duas grafias, ignorando acentos: "The Godfather", "O Poderoso
 Chefão" e "Poderoso Chefao" chegam ao mesmo filme.
+
+**`movielens_user_map` é a ponte para o re-treino.** O motor treina sobre
+usuários do MovieLens (inteiros de 1 a ~200 mil); os do app são UUID. Um
+usuário só ganha uma linha aqui quando é exportado pela primeira vez para o
+re-treino — a maioria nunca chega a ter uma. Ver
+[README do motor](../recommendation-engine/README-RE.md#re-treino-com-os-ratings-do-app).
+
+**`avaliacao` tem três estados, e cada um vira uma nota diferente.** `LIKE` →
+5.0, `SEEN` → 2.5, `DISLIKE` → 0.0, na escala do MovieLens. O `SEEN` é o sinal
+neutro: não puxa recomendação para nenhum lado, mas tira o filme da lista de
+candidatos — "já vi, não me ofereça de novo". Hoje só o onboarding oferece esse
+botão — oferecê-lo também na tela de detalhes é uma pendência conhecida.
+
+**`trailer_key` guarda só a chave do YouTube**, não a URL inteira — o app monta
+`youtube.com/watch?v={key}`. Quando é nulo, o TMDB não conhece trailer para o
+filme e **o botão de assistir some da tela**, em vez de cair numa busca por
+título, que costumava trazer review ou o filme errado.
 
 ---
 
@@ -223,31 +303,34 @@ Chefão" e "Poderoso Chefao" chegam ao mesmo filme.
 
 ### Backend
 
-Tudo exige `Authorization: Bearer <token>`, exceto onde indicado.
+Tudo exige `Authorization: Bearer <token>`, exceto onde indicado. Contrato
+completo, navegável, em `/v3/api-docs` e `/swagger-ui.html` — ligado por padrão
+(ambiente é dev); em produção, desligue com `SWAGGER_UI_ENABLED=false`.
 
 | Método | Rota | Descrição |
 |---|---|---|
-| `POST` | `/api/auth/register` | Cadastro — público |
-| `POST` | `/api/auth/login` | Login — público, com rate limit por IP |
-| `POST` | `/api/auth/refresh` | Renova a sessão — público, consome e rotaciona o refresh token |
-| `POST` | `/api/auth/logout` | Revoga os refresh tokens do usuário |
-| `GET` | `/api/users/me` | Perfil |
-| `PUT` | `/api/users/me` | Atualiza nome, e-mail, senha |
-| `GET` | `/api/users/me/stats` | Avaliados, assistidos, favoritos |
-| `PUT` | `/api/users/me/genres` | Gêneros preferidos |
-| `GET` | `/api/movies?genre=&page=&size=` | Catálogo paginado — público |
-| `GET` | `/api/movies/{id}` | Detalhes — público |
-| `GET` | `/api/movies/search?q=&page=&size=` | Busca bilíngue — público |
-| `GET` | `/api/movies/featured` | Destaque — público |
-| `POST` | `/api/ratings` | Registra uma avaliação |
-| `POST` | `/api/ratings/batch` | Registra várias — usado no onboarding |
-| `GET` | `/api/ratings/me` | Histórico |
-| `DELETE` | `/api/ratings/{movieId}` | Remove avaliação |
-| `GET` | `/api/watchlist` | Lista salvos |
-| `POST` | `/api/watchlist/{movieId}` | Adiciona |
-| `DELETE` | `/api/watchlist/{movieId}` | Remove |
-| `GET` | `/api/recommendations` | Duas trilhas de sugestões |
-| `POST` | `/api/recommendations/cold-start` | Sugestões pós-onboarding |
+| `POST` | `/api/v1/auth/register` | Cadastro — público |
+| `POST` | `/api/v1/auth/login` | Login — público, com rate limit por IP |
+| `POST` | `/api/v1/auth/refresh` | Renova a sessão — público, consome e rotaciona o refresh token |
+| `POST` | `/api/v1/auth/logout` | Revoga os refresh tokens do usuário |
+| `GET` | `/api/v1/users/me` | Perfil |
+| `PUT` | `/api/v1/users/me` | Atualiza nome, e-mail, senha |
+| `GET` | `/api/v1/users/me/stats` | Avaliados, assistidos, favoritos |
+| `PUT` | `/api/v1/users/me/genres` | Gêneros preferidos |
+| `GET` | `/api/v1/movies?genre=&sort=&page=&size=` | Catálogo paginado — público. `sort`: `popular`, `recent` ou `rating` (padrão) |
+| `GET` | `/api/v1/movies/{id}` | Detalhes — público |
+| `GET` | `/api/v1/movies/search?q=&page=&size=` | Busca bilíngue — público |
+| `GET` | `/api/v1/movies/featured` | Destaque — público |
+| `POST` | `/api/v1/ratings` | Registra uma avaliação |
+| `POST` | `/api/v1/ratings/batch` | Registra várias — usado no onboarding |
+| `GET` | `/api/v1/ratings/me` | Histórico |
+| `GET` | `/api/v1/ratings/{movieId}` | Avaliação de um filme específico — 404 se não avaliado |
+| `DELETE` | `/api/v1/ratings/{movieId}` | Remove avaliação |
+| `GET` | `/api/v1/watchlist` | Lista salvos |
+| `POST` | `/api/v1/watchlist/{movieId}` | Adiciona |
+| `DELETE` | `/api/v1/watchlist/{movieId}` | Remove |
+| `GET` | `/api/v1/recommendations` | Duas trilhas de sugestões |
+| `POST` | `/api/v1/recommendations/cold-start` | Sugestões pós-onboarding |
 | `GET` | `/actuator/health` | Healthcheck — público |
 
 **Semântica de erro:** 401 é sessão expirada ou ausente (o app desloga e volta
@@ -261,6 +344,7 @@ ao login); 403 é autenticado sem permissão; 404 é recurso inexistente.
 | `POST` | `/api/v1/recommend/cold-start` | A partir de filmes curtidos no onboarding |
 | `GET` | `/api/v1/recommend/{user_id}` | Só para usuários do MovieLens — avaliação do modelo |
 | `GET` | `/api/v1/movies/search?q=&limit=` | Busca no dataset |
+| `GET` | `/` | Healthcheck |
 
 ---
 
@@ -282,9 +366,14 @@ Git, e a imagem funciona em qualquer clone limpo.
 completa. Índices GIN com `pg_trgm` sobre a forma sem acento resolvem tanto a
 busca por título quanto o filtro por gênero.
 
-**Cache e rate limit são por instância.** Com mais de um nó do backend, o limite
-efetivo multiplica e cada nó tem seu próprio cache. Para valer em produção,
-precisam de Redis.
+**Cache e rate limit são compartilhados via Redis.** O cache do catálogo
+(`movies`, `movieById`, `featuredMovie`) e o contador de tentativas de login
+vivem no Redis, não em memória do processo — com mais de um nó do backend,
+todos leem e invalidam o mesmo estado. Cada cache serializa com o tipo real
+que guarda (`MovieResponse` ou `List<MovieResponse>`), não com o serializer
+genérico do Jackson, que exige metadado de tipo incompatível com o valor
+gravado sem ele. Se o Redis cair, cache e rate limit degradam — a chamada
+segue para o banco, e o login é permitido — em vez de derrubar a API.
 
 ---
 
@@ -295,4 +384,3 @@ precisam de Redis.
 | Catálogo dessincronizado: backend tem 9.742 filmes, motor 80.505 | Sugestões fora do catálogo são descartadas, então a lista pode vir com menos itens |
 | `GET /api/v1/recommend/{user_id}` carrega o SVD sob demanda | A primeira chamada a esse endpoint leva mais de dois minutos e consome ~10 GB |
 | Chave TMDB exposta no histórico do Git | Precisa ser rotacionada |
-| Cache e rate limit em memória | Impedem escalar horizontalmente sem Redis. Sem impacto enquanto for uma instância só |

@@ -54,7 +54,7 @@ class BackendApplicationTests extends IntegrationTestBase {
         // devolvia 500. Foi assim que /actuator/health, sem a dependência do
         // actuator, virou "erro interno" em vez de "rota não existe".
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .get("/api/movies/rota/que/nao/existe"))
+                        .get("/api/v1/movies/rota/que/nao/existe"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .status().isNotFound());
     }
@@ -65,7 +65,7 @@ class BackendApplicationTests extends IntegrationTestBase {
         // 401 em vez de 404: sem autenticação, a resposta não deve permitir
         // mapear quais rotas existem.
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .get("/api/rota/que/nao/existe"))
+                        .get("/api/v1/rota/que/nao/existe"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .status().isUnauthorized());
     }
@@ -75,7 +75,7 @@ class BackendApplicationTests extends IntegrationTestBase {
     void corsIsNotWideOpen() {
         var source = (CorsConfigurationSource) context.getBean("corsConfigurationSource");
 
-        var request = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/movies");
+        var request = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/v1/movies");
         var config = source.getCorsConfiguration(request);
 
         assertThat(config).isNotNull();

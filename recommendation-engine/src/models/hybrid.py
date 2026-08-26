@@ -61,6 +61,11 @@ class HybridRecommender:
         # Opcional para manter compatibilidade com modelos serializados antes de
         # o item-item existir; nesses casos o content-based segue respondendo.
         self.ii = item_item_model
+        if item_item_model is None:
+            logger.warning(
+                "HybridRecommender montado sem item-item: as recomendações vão "
+                "degradar para content-based."
+            )
 
     # ─── Modelo colaborativo por SVD, carregado sob demanda ───────────────────
 
@@ -175,11 +180,14 @@ class HybridRecommender:
 
         `rated` é uma lista de (movie_id, rating) na escala 0–5.
 
-        Limitação conhecida: o SVD colaborativo só sabe pontuar usuários vistos
-        no treino. Usuários do app não estão nesse conjunto, então aqui usamos
-        apenas o sinal content-based, penalizando itens parecidos com os que o
-        usuário rejeitou. Para ativar o CF de verdade é preciso re-treinar
-        incluindo os ratings do app (ver docs/code-review-2026-07.md §3.1).
+        Preferência: item-item, que funciona para quem não estava no treino —
+        basta a lista do que a pessoa avaliou. Cai para content-based quando o
+        item-item não tem o que dizer (histórico curto, filmes fora do índice),
+        penalizando itens parecidos com os que o usuário rejeitou.
+
+        Limitação conhecida: o SVD colaborativo não entra em nenhum dos dois
+        caminhos — ele só sabe pontuar usuários vistos no treino, e usuários do
+        app nunca estão nesse conjunto.
         """
         if not rated:
             return pd.DataFrame()

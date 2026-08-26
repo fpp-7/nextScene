@@ -1,6 +1,7 @@
 package io.nextscene.backend.dto;
 
 import io.nextscene.backend.model.Movie;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Arrays;
 import java.util.List;
@@ -11,10 +12,15 @@ public record MovieResponse(
         int year,
         String genre,
         double rating,
+        @Schema(description = "Sempre igual a `rating`. Nenhuma tela do app lê este "
+                + "campo — mantido pelo DTO, não pelo contrato real.")
         double imdb,
         String poster,
         String synopsis,
-        List<String> cast
+        List<String> cast,
+        @Schema(description = "Chave do vídeo no YouTube. Ausente quando não há trailer conhecido.",
+                nullable = true)
+        String trailerKey
 ) {
     public static MovieResponse from(Movie movie) {
         List<String> castList = movie.getCastList() != null
@@ -30,7 +36,8 @@ public record MovieResponse(
                 movie.getRating() != null ? movie.getRating() : 0.0,
                 movie.getPosterUrl() != null ? movie.getPosterUrl() : "",
                 movie.getSynopsis() != null ? movie.getSynopsis() : "",
-                castList
+                castList,
+                movie.getTrailerKey()
         );
     }
 

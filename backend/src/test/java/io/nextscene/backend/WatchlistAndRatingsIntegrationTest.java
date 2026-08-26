@@ -34,12 +34,12 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
     void watchlistReturnsMoviePayload() throws Exception {
         String token = bearer();
 
-        mockMvc.perform(post("/api/watchlist/" + MOVIE_TOY_STORY).header("Authorization", token))
+        mockMvc.perform(post("/api/v1/watchlist/" + MOVIE_TOY_STORY).header("Authorization", token))
                 .andExpect(status().isCreated());
 
         // Regressão: o serviço não era transacional e `open-in-view` está desligado,
         // então acessar wl.getMovie() fora da transação estourava 500.
-        mockMvc.perform(get("/api/watchlist").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/watchlist").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].movieId").value(MOVIE_TOY_STORY))
                 .andExpect(jsonPath("$[0].movie.title").isNotEmpty())
@@ -51,10 +51,10 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
     void addingTwiceIsIdempotent() throws Exception {
         String token = bearer();
 
-        mockMvc.perform(post("/api/watchlist/" + MOVIE_JUMANJI).header("Authorization", token));
-        mockMvc.perform(post("/api/watchlist/" + MOVIE_JUMANJI).header("Authorization", token));
+        mockMvc.perform(post("/api/v1/watchlist/" + MOVIE_JUMANJI).header("Authorization", token));
+        mockMvc.perform(post("/api/v1/watchlist/" + MOVIE_JUMANJI).header("Authorization", token));
 
-        mockMvc.perform(get("/api/watchlist").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/watchlist").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
     }
@@ -63,12 +63,12 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
     @DisplayName("remover tira o item da lista")
     void removeDropsTheItem() throws Exception {
         String token = bearer();
-        mockMvc.perform(post("/api/watchlist/" + MOVIE_HEAT).header("Authorization", token));
+        mockMvc.perform(post("/api/v1/watchlist/" + MOVIE_HEAT).header("Authorization", token));
 
-        mockMvc.perform(delete("/api/watchlist/" + MOVIE_HEAT).header("Authorization", token))
+        mockMvc.perform(delete("/api/v1/watchlist/" + MOVIE_HEAT).header("Authorization", token))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/watchlist").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/watchlist").header("Authorization", token))
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
@@ -78,9 +78,9 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
         String alice = bearer();
         String bob = bearer();
 
-        mockMvc.perform(post("/api/watchlist/" + MOVIE_TOY_STORY).header("Authorization", alice));
+        mockMvc.perform(post("/api/v1/watchlist/" + MOVIE_TOY_STORY).header("Authorization", alice));
 
-        mockMvc.perform(get("/api/watchlist").header("Authorization", bob))
+        mockMvc.perform(get("/api/v1/watchlist").header("Authorization", bob))
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
@@ -92,16 +92,52 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
         String token = bearer();
         var body = objectMapper.writeValueAsString(Map.of("movieId", MOVIE_TOY_STORY, "type", "like"));
 
-        mockMvc.perform(post("/api/ratings")
+        mockMvc.perform(post("/api/v1/ratings")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get("/api/ratings/me").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/ratings/me").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].movieId").value(MOVIE_TOY_STORY))
                 .andExpect(jsonPath("$[0].type").value("like"))
                 .andExpect(jsonPath("$[0].id").isString());
+    }
+
+    @Test
+    @DisplayName("GET /ratings/{movieId} devolve a avaliação de um filme, sem baixar o histórico inteiro")
+    void myRatingForReturnsSingleRating() throws Exception {
+        String token = bearer();
+        var body = objectMapper.writeValueAsString(Map.of("movieId", MOVIE_TOY_STORY, "type", "dislike"));
+
+        mockMvc.perform(post("/api/v1/ratings")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/ratings/" + MOVIE_TOY_STORY).header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.movieId").value(MOVIE_TOY_STORY))
+                .andExpect(jsonPath("$.type").value("dislike"))
+                .andExpect(jsonPath("$.id").isString());
+    }
+
+    @Test
+    @DisplayName("GET /ratings/{movieId} é 404 quando o filme existe mas não foi avaliado")
+    void myRatingForUnratedMovieIsNotFound() throws Exception {
+        String token = bearer();
+
+        mockMvc.perform(get("/api/v1/ratings/" + MOVIE_JUMANJI).header("Authorization", token))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /ratings/{movieId} é 404 para filme inexistente")
+    void myRatingForUnknownMovieIsNotFound() throws Exception {
+        String token = bearer();
+
+        mockMvc.perform(get("/api/v1/ratings/999999").header("Authorization", token))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -116,16 +152,16 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
 
         // Regressão: o onboarding só chamava /recommendations/cold-start, que não
         // grava nada — o histórico do usuário nascia vazio.
-        mockMvc.perform(post("/api/ratings/batch")
+        mockMvc.perform(post("/api/v1/ratings/batch")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.length()").value(3));
 
-        mockMvc.perform(get("/api/ratings/me").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/ratings/me").header("Authorization", token))
                 .andExpect(jsonPath("$.length()").value(3));
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", token))
                 .andExpect(jsonPath("$.interactionCount").value(3));
     }
 
@@ -136,17 +172,17 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
 
         for (String type : List.of("like", "dislike")) {
             var body = objectMapper.writeValueAsString(Map.of("movieId", MOVIE_JUMANJI, "type", type));
-            mockMvc.perform(post("/api/ratings")
+            mockMvc.perform(post("/api/v1/ratings")
                     .header("Authorization", token)
                     .contentType(MediaType.APPLICATION_JSON).content(body));
         }
 
-        mockMvc.perform(get("/api/ratings/me").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/ratings/me").header("Authorization", token))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].type").value("dislike"));
 
         // O contador mede interações distintas: reavaliar não pode inflá-lo.
-        mockMvc.perform(get("/api/users/me").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", token))
                 .andExpect(jsonPath("$.interactionCount").value(1));
     }
 
@@ -156,7 +192,7 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
         String token = bearer();
         var body = objectMapper.writeValueAsString(Map.of("movieId", MOVIE_TOY_STORY, "type", "adorei"));
 
-        mockMvc.perform(post("/api/ratings")
+        mockMvc.perform(post("/api/v1/ratings")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -169,7 +205,7 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
         String token = bearer();
         var body = objectMapper.writeValueAsString(Map.of("movieId", 99_999_999, "type", "like"));
 
-        mockMvc.perform(post("/api/ratings")
+        mockMvc.perform(post("/api/v1/ratings")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound());
@@ -184,11 +220,11 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
                 Map.of("movieId", MOVIE_JUMANJI, "type", "like"),
                 Map.of("movieId", MOVIE_HEAT, "type", "seen")
         ));
-        mockMvc.perform(post("/api/ratings/batch")
+        mockMvc.perform(post("/api/v1/ratings/batch")
                 .header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content(body));
 
-        mockMvc.perform(get("/api/users/me/stats").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/users/me/stats").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rated").value(3))
                 .andExpect(jsonPath("$.favorites").value(2))

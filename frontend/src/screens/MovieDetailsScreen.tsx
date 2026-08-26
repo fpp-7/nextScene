@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Linking, Platform, Alert } from 'react-native';
 import { messageFor } from '../services/errors';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ArrowLeft, Star, Calendar, Bookmark, ThumbsUp, ThumbsDown, Play } from 'lucide-react-native';
+import { ArrowLeft, Star, Calendar, Bookmark, ThumbsUp, ThumbsDown, Play, Eye } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { RootStackParamList } from '../navigation/types';
@@ -26,7 +26,7 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [rating, setRating] = useState<'like' | 'dislike' | null>(null);
+  const [rating, setRating] = useState<'like' | 'dislike' | 'seen' | null>(null);
   const [isRating, setIsRating] = useState(false);
 
   const isSaved = isInWatchlist(id);
@@ -39,17 +39,12 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
       if (!movieData) throw new Error('Filme não encontrado');
       setMovie(movieData);
 
-      // Fetch user ratings resiliently
+      // Busca só a avaliação deste filme, não o histórico inteiro.
       try {
-        const ratingsData = await ratingService.getMyRatings();
-        const userRating = ratingsData?.find((r) => r.movieId === id);
-        if (userRating) {
-          setRating(userRating.type === 'like' || userRating.type === 'dislike' ? userRating.type : null);
-        } else {
-          setRating(null);
-        }
+        const userRating = await ratingService.getMyRatingFor(id);
+        setRating(userRating?.type ?? null);
       } catch (ratingErr) {
-        // Fallback silently if ratings call fails (e.g. token expired)
+        // Falha silenciosa (ex.: sessão expirada) — não impede ver o filme.
         setRating(null);
       }
     } catch (err: any) {
@@ -73,7 +68,7 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
     }
   };
 
-  const handleRate = async (type: 'like' | 'dislike') => {
+  const handleRate = async (type: 'like' | 'dislike' | 'seen') => {
     if (isRating) return;
     const previous = rating;
     setIsRating(true);
@@ -149,20 +144,23 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           </SafeAreaView>
 
-          <View style={styles.playButtonContainer}>
-            <TouchableOpacity 
-              style={styles.playButton} 
-              activeOpacity={0.8}
-              onPress={() => {
-                if (movie) {
-                  const query = encodeURIComponent(movie.title + ' trailer');
-                  Linking.openURL(`https://www.youtube.com/results?search_query=${query}`);
-                }
-              }}
-            >
-              <Play size={32} color={colors.primaryForeground} fill={colors.primaryForeground} style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-          </View>
+          {/* Sem trailerKey, o TMDB ainda não achou o vídeo deste filme — o
+              botão some em vez de cair numa busca que pode trazer qualquer
+              coisa (review, reação, filme errado). */}
+          {movie.trailerKey && (
+            <View style={styles.playButtonContainer}>
+              <TouchableOpacity
+                style={styles.playButton}
+                activeOpacity={0.8}
+                accessibilityLabel="Assistir trailer"
+                onPress={() => {
+                  Linking.openURL(`https://www.youtube.com/watch?v=${movie.trailerKey}`);
+                }}
+              >
+                <Play size={32} color={colors.primaryForeground} fill={colors.primaryForeground} style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View style={styles.content}>
@@ -220,6 +218,22 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
               <ThumbsDown size={20} color={rating === 'dislike' ? colors.red400 : colors.mutedForeground} />
               <Text style={[styles.actionBtnText, rating === 'dislike' && { color: colors.red400 }]}>Não Gostei</Text>
             </TouchableOpacity>
+
+            {/* "Já assisti" é sinal neutro (score 2.5): conta como visto sem
+                puxar a recomendação para cima nem para baixo. O backend e o
+                onboarding já suportavam, mas não havia como marcar depois. */}
+            <TouchableOpacity
+              style={[styles.actionBtn, rating === 'seen' && styles.actionBtnActiveSeen]}
+              activeOpacity={0.7}
+              onPress={() => handleRate('seen')}
+              disabled={isRating}
+              accessibilityRole="button"
+              accessibilityState={{ selected: rating === 'seen', disabled: isRating }}
+              accessibilityLabel="Já assisti este filme"
+            >
+              <Eye size={20} color={rating === 'seen' ? colors.white : colors.mutedForeground} />
+              <Text style={[styles.actionBtnText, rating === 'seen' && { color: colors.white }]}>Já Assisti</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.section}>
@@ -266,10 +280,13 @@ const styles = StyleSheet.create({
   genreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
   genreChip: { backgroundColor: 'rgba(212,160,23,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(212,160,23,0.3)' },
   genreText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
-  actionsRow: { flexDirection: 'row', gap: 16, marginBottom: 32 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
+  // gap menor e texto um pouco menor que os dois botões originais: agora são
+  // três numa linha só, e "Não Gostei" quebrava em tela estreita.
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 32 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 12, backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
   actionBtnActiveLike: { backgroundColor: 'rgba(212,160,23,0.1)', borderColor: colors.primary },
   actionBtnActiveDislike: { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: colors.red400 },
+  actionBtnActiveSeen: { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: colors.white },
   actionBtnText: { color: colors.mutedForeground, fontSize: 16, fontWeight: '500' },
   actionBtnTextActive: { color: colors.primary },
   section: { marginBottom: 32 },
