@@ -88,6 +88,11 @@ app:
     login:
       max-attempts: ${LOGIN_MAX_ATTEMPTS:10}
       window-minutes: ${LOGIN_WINDOW_MINUTES:15}
+    register:
+      # Bem mais folgado que o login, e na mesma janela: atrás de CGNAT ou da
+      # saída de uma empresa, muita gente legítima compartilha um IP. O limite
+      # existe para conter criação em massa, não para racionar cadastro.
+      max-attempts: ${REGISTER_MAX_ATTEMPTS:50}
   recommendation-engine:
     url: ${RECOMMENDATION_ENGINE_URL:http://localhost:8000}
   tmdb:

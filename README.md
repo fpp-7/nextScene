@@ -44,11 +44,18 @@ graph LR
 cp .env.example .env
 ```
 
-Duas variáveis não têm valor padrão de propósito:
+Duas variáveis não têm valor padrão de propósito — a pilha **não sobe** sem elas:
 
-- `JWT_SECRET` — **a aplicação não sobe sem ela**. Gere com `openssl rand -base64 48`.
-- `TMDB_API_KEY` — opcional, mas sem ela os filmes ficam sem pôster, sinopse e
-  título em português. Pegue em https://www.themoviedb.org/settings/api
+- `JWT_SECRET` — gere com `openssl rand -base64 48`.
+- `POSTGRES_PASSWORD` — qualquer senha sua. Tinha default `postgres` até pouco
+  tempo atrás, o que entregava o banco a quem subisse o compose num servidor.
+
+E uma opcional:
+
+- `TMDB_API_KEY` — sem ela os filmes ficam sem pôster, sinopse, elenco e
+  trailer — e, como o catálogo esconde filmes sem elenco nem tradução, as
+  prateleiras ficam bem mais magras. Pegue em
+  https://www.themoviedb.org/settings/api
 
 **2. Suba a pilha:**
 
@@ -118,7 +125,7 @@ build se um `.env` voltar a ser versionado.
 |---|---|---|
 | Backend | 8080 | |
 | App (Expo Web) | 8081 | |
-| PostgreSQL | 5433 | Mapeada para não conflitar com um Postgres local |
+| PostgreSQL | 5433 | Só em `127.0.0.1`, para o psql da sua máquina. Em produção, remova o bloco `ports` |
 | Motor | — | Sem porta pública: não tem autenticação e só o backend precisa alcançá-lo |
 | Redis | — | Sem porta pública: cache do catálogo e rate limit de login, só o backend precisa alcançá-lo |
 
@@ -176,6 +183,24 @@ Em banco limpo isso não ocorre — a migration V10 já cuida do reprocessamento
 `docker compose logs recommendation-engine`. Se os modelos não estiverem no
 lugar, rode o pipeline de treino ou volte ao padrão (`docker compose up -d` sem
 o override).
+
+---
+
+## Gerando o app para distribuição
+
+O `expo start` serve para desenvolver. Para um binário instalável:
+
+```bash
+cd frontend && npx eas build --profile preview --platform android
+```
+
+Os perfis ficam em [`frontend/eas.json`](frontend/eas.json). O identificador do
+app é `io.nextscene.app` nas duas plataformas (`app.json`).
+
+> ⚠️ O perfil `production` aponta `EXPO_PUBLIC_API_URL` para
+> `https://api.nextscene.io/api/v1`, que é **um placeholder**. Troque pelo
+> domínio real antes do primeiro build de produção — a URL é embutida no bundle
+> em build time e não dá para mudar depois sem rebuildar.
 
 ---
 

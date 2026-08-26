@@ -107,7 +107,6 @@ public class RatingService {
             rating = new Rating();
             rating.setUser(user);
             rating.setMovie(movie);
-            user.setInteractionCount(user.getInteractionCount() + 1);
         }
 
         rating.setAvaliacao(avaliacao);

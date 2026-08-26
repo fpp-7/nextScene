@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from src.config import (
     API_PREFIX,
+    ENV,
     DEFAULT_TOP_N,
     MAX_TOP_N,
     MIN_RATINGS_FOR_RECOMMENDATION,
@@ -176,7 +177,17 @@ def recommend_for_user(
 
     Não use para usuários do aplicativo: os IDs vêm de datasets diferentes e não
     se correspondem. Para usuários reais, use `/recommend/history`.
+
+    Desligado quando ENV=production: este é o único caminho que chama
+    `_ratings()`, que carrega ~1 GB de avaliações sob demanda. Nenhum usuário do
+    aplicativo passa por aqui — uma chamada acidental em produção só serviria
+    para estourar a memória do container.
     """
+    if ENV == "production":
+        raise HTTPException(
+            status_code=404,
+            detail="Endpoint de avaliação do modelo, indisponível em produção.")
+
     hybrid:  HybridRecommender = state["hybrid"]
     movies:  pd.DataFrame       = state["movies"]
     ratings: pd.DataFrame       = _ratings()

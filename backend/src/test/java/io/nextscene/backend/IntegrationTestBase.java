@@ -90,5 +90,9 @@ public abstract class IntegrationTestBase {
         // Sem chave do TMDB o job de enriquecimento não sai chamando a rede.
         registry.add("app.tmdb.api-key", () -> "");
         registry.add("app.tmdb.enabled", () -> false);
+        // A suíte cadastra um usuário novo por teste, todos do mesmo IP: com o
+        // teto de produção ela bateria em 429 no meio da execução. O limite em
+        // si tem cobertura própria em LoginRateLimiterTest.
+        registry.add("app.security.register.max-attempts", () -> 10_000);
     }
 }

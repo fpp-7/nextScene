@@ -6,6 +6,7 @@ import io.nextscene.backend.dto.UserStatsResponse;
 import io.nextscene.backend.dto.UserUpdateRequest;
 import io.nextscene.backend.infra.AuthenticatedUser;
 import io.nextscene.backend.service.UserService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +31,7 @@ public class UserController {
     @PutMapping("/me")
     public ResponseEntity<UserResponse> updateProfile(
             @AuthenticationPrincipal AuthenticatedUser user,
-            @RequestBody UserUpdateRequest request
+            @Valid @RequestBody UserUpdateRequest request
     ) {
         return ResponseEntity.ok(userService.updateProfile(user.id(), request));
     }

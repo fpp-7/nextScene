@@ -22,6 +22,12 @@ COPY scripts/ ./scripts/
 # 918 MB e ia inteiro para o contexto de build a cada execução.
 RUN python scripts/bootstrap.py
 
+# Usuário sem privilégios, como no Dockerfile do backend. Criado depois do
+# bootstrap porque o treino escreve em /app/data e /app/models_saved; a partir
+# daqui o processo só lê esses diretórios.
+RUN useradd --system --create-home --shell /usr/sbin/nologin appuser     && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 # Cada worker carrega os modelos e o dataset em memória — subir WORKERS aumenta

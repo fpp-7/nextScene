@@ -12,9 +12,15 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-nextscene}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Sem default, como o JWT_SECRET: a senha vinha de `${...:-postgres}` e a
+      # porta era publicada, então subir este compose num servidor entregava o
+      # banco com a senha que todo mundo tenta primeiro.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    # Publicada só no loopback: o app fala com o Postgres pela rede interna do
+    # compose, e a porta no host existe para o psql e o DBeaver da sua máquina —
+    # não para a LAN. Em produção, remova este bloco por completo.
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

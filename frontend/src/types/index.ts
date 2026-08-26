@@ -5,7 +5,8 @@ export interface User {
   name: string;
   email: string;
   genresPreference: string[];
-  interactionCount: number;
+  /** Gêneros vetados pelo usuário; o backend não recomenda nada com eles. */
+  genresExcluded: string[];
 }
 
 // Auth

@@ -142,6 +142,109 @@ class UserPreferencesIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
+    // ─── Validação de PUT /users/me ───────────────────────────────────────────
+
+    @Test
+    @DisplayName("a política de senha do cadastro também vale na edição de perfil")
+    void shortPasswordIsRejectedOnUpdate() throws Exception {
+        String token = registerAndGetToken(uniqueEmail());
+
+        // Regressão: UserUpdateRequest era três Strings cruas, sem validação —
+        // o cadastro exigia 6 caracteres e a edição aceitava 1.
+        mockMvc.perform(put("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "password", "a", "currentPassword", "senha123"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("e-mail inválido é recusado antes de trancar o usuário para fora")
+    void invalidEmailIsRejectedOnUpdate() throws Exception {
+        String token = registerAndGetToken(uniqueEmail());
+
+        mockMvc.perform(put("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("email", "nao-e-email"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    // ─── Troca de senha ───────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("trocar a senha sem informar a atual é 401")
+    void passwordChangeRequiresCurrentPassword() throws Exception {
+        String token = registerAndGetToken(uniqueEmail());
+
+        // Sem isto, um access token roubado (30 min de janela) viraria o
+        // sequestro definitivo da conta: o atacante troca a senha e o dono some.
+        mockMvc.perform(put("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("password", "novaSenha123"))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("senha atual errada também é 401")
+    void passwordChangeRejectsWrongCurrentPassword() throws Exception {
+        String token = registerAndGetToken(uniqueEmail());
+
+        mockMvc.perform(put("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "password", "novaSenha123", "currentPassword", "chutei"))))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("com a senha atual correta, troca e derruba as outras sessões")
+    void passwordChangeSucceedsAndRevokesSessions() throws Exception {
+        String email = uniqueEmail();
+        var registered = mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "Usuario Teste", "email", email, "password", "senha123"))))
+                .andReturn().getResponse().getContentAsString();
+        var json = objectMapper.readTree(registered);
+        String token = json.get("token").asString();
+        String refreshToken = json.get("refreshToken").asString();
+
+        mockMvc.perform(put("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "password", "novaSenha123", "currentPassword", "senha123"))))
+                .andExpect(status().isOk());
+
+        // Trocar a senha é a reação de quem desconfia de invasão: precisa
+        // derrubar as sessões que já estavam abertas para servir de alguma coisa.
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("refreshToken", refreshToken))))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "email", email, "password", "novaSenha123"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("o perfil não expõe mais o contador denormalizado")
+    void profileNoLongerExposesInteractionCount() throws Exception {
+        String token = registerAndGetToken(uniqueEmail());
+
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interactionCount").doesNotExist())
+                .andExpect(jsonPath("$.genresExcluded").isArray());
+    }
+
     private void putGenres(String token, List<String> liked, List<String> disliked) throws Exception {
         mockMvc.perform(put("/api/v1/users/me/genres")
                         .header("Authorization", "Bearer " + token)

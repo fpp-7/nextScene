@@ -52,6 +52,4 @@ public class AppUser {
     @Column(name = "genres_excluded")
     private List<String> genresExcluded = new ArrayList<>();
 
-    @Column(name = "interaction_count", nullable = false)
-    private Integer interactionCount = 0;
 }

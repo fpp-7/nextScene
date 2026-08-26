@@ -94,6 +94,31 @@ class CatalogVisibilityIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    @DisplayName("o destaque exige um piso de votos, não só a maior nota")
+    void featuredRequiresPopularityFloor() throws Exception {
+        // Uma obscuridade com nota 10 e 3 votos. Sem o piso, ela assumiria o
+        // destaque na hora — foi o que colocou lá uma compilação de 174 votos.
+        int obscureId = 90_000_003;
+        jdbcTemplate.update("DELETE FROM movie WHERE movie_id = ?", obscureId);
+        jdbcTemplate.update(
+                "INSERT INTO movie (movie_id, title, genres, year, synopsis, cast_list, "
+                        + "rating, vote_count, displayable, enriched_at) "
+                        + "VALUES (?, 'Obscuridade Nota Dez', 'Drama', 1999, 'Tem sinopse.', "
+                        + "'Fulano', 10.0, 3, TRUE, now())",
+                obscureId);
+        cacheEvictor.evictCatalog();
+
+        try {
+            mockMvc.perform(get("/api/v1/movies/featured"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(org.hamcrest.Matchers.not(obscureId)));
+        } finally {
+            jdbcTemplate.update("DELETE FROM movie WHERE movie_id = ?", obscureId);
+            cacheEvictor.evictCatalog();
+        }
+    }
+
+    @Test
     @DisplayName("V12 marca como inexibível o que o enriquecimento já deixou vazio")
     void backfillHidWhatWasAlreadyEnrichedAndEmpty() {
         Integer leaked = jdbcTemplate.queryForObject("""

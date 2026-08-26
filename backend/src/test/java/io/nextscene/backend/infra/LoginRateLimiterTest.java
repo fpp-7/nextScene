@@ -120,4 +120,37 @@ class LoginRateLimiterTest {
                 .as("a 3ª tentativa, em qualquer nó, já deve estourar o limite de 2")
                 .isFalse();
     }
+
+    @Test
+    @DisplayName("o teto por chamada permite ao cadastro ter limite próprio")
+    void perCallLimitOverridesTheDefault() {
+        // O cadastro precisa de um teto bem mais alto que o login: atrás de
+        // CGNAT muita gente legítima compartilha um IP. Testar aqui é o que
+        // permitiu a suíte de integração deixar de bater em 429.
+        var limiter = limiter(2);
+        String ip = client("10.0.0.1");
+
+        for (int i = 0; i < 5; i++) {
+            assertThat(limiter.tryConsume("register:" + ip, 5))
+                    .as("tentativa %d de cadastro, com teto 5", i + 1)
+                    .isTrue();
+        }
+        assertThat(limiter.tryConsume("register:" + ip, 5)).isFalse();
+    }
+
+    @Test
+    @DisplayName("cadastro e login não dividem o mesmo contador")
+    void registerAndLoginCountersAreIndependent() {
+        // Senão um cadastro consumiria as tentativas de quem só quer entrar.
+        var limiter = limiter(2);
+        String ip = client("10.0.0.1");
+
+        limiter.tryConsume("register:" + ip, 2);
+        limiter.tryConsume("register:" + ip, 2);
+        assertThat(limiter.tryConsume("register:" + ip, 2)).isFalse();
+
+        assertThat(limiter.tryConsume(ip))
+                .as("o login do mesmo IP começa com o contador zerado")
+                .isTrue();
+    }
 }

@@ -45,8 +45,20 @@ public class LoginRateLimiter {
         this.window = Duration.ofMinutes(windowMinutes);
     }
 
-    /** Registra uma tentativa e diz se ela ainda está dentro do limite. */
+    /** Registra uma tentativa de login e diz se ela ainda está dentro do limite. */
     public boolean tryConsume(String clientKey) {
+        return tryConsume(clientKey, maxAttempts);
+    }
+
+    /**
+     * Variante com teto próprio, para chaves que não são login.
+     * <p>
+     * O cadastro precisa de um limite bem mais folgado que o login: atrás de
+     * CGNAT ou da saída de uma empresa, dezenas de pessoas legítimas
+     * compartilham o mesmo IP, e o custo de errar aqui é impedir alguém de
+     * criar conta — pior que o abuso que o limite tenta conter.
+     */
+    public boolean tryConsume(String clientKey, int limit) {
         String key = KEY_PREFIX + clientKey;
         try {
             Long count = redis.opsForValue().increment(key);
@@ -55,7 +67,7 @@ public class LoginRateLimiter {
             if (count != null && count == 1L) {
                 redis.expire(key, window);
             }
-            return count == null || count <= maxAttempts;
+            return count == null || count <= limit;
         } catch (Exception e) {
             log.warn("Redis indisponível para rate limit de login (chave {}) — permitindo a tentativa.",
                     clientKey, e);
