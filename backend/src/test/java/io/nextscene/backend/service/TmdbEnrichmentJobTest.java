@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class TmdbEnrichmentJobTest {
 
-    private final TmdbEnrichmentJob job = new TmdbEnrichmentJob(null, null);
+    private final TmdbEnrichmentJob job = new TmdbEnrichmentJob(null, null, null);
 
     @Test
     @DisplayName("prefere o trailer oficial entre vários candidatos")

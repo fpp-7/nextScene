@@ -97,9 +97,9 @@ public class MovieService {
 
         List<Movie> movies;
         if (genre != null && !genre.isBlank() && !genre.equalsIgnoreCase("Todos")) {
-            movies = movieRepository.findByGenresContainingIgnoreCase(translateGenre(genre), pageable);
+            movies = movieRepository.findByGenresContainingIgnoreCaseAndDisplayableTrue(translateGenre(genre), pageable);
         } else {
-            movies = movieRepository.findAll(pageable).getContent();
+            movies = movieRepository.findByDisplayableTrue(pageable);
         }
         return movies.stream().map(MovieResponse::from).toList();
     }
@@ -111,7 +111,7 @@ public class MovieService {
 
     @Cacheable("featuredMovie")
     public MovieResponse getFeaturedMovie() {
-        Movie movie = movieRepository.findTopByOrderByRatingDesc()
+        Movie movie = movieRepository.findTopByDisplayableTrueOrderByRatingDesc()
                 .orElseThrow(() -> new IllegalArgumentException("Nenhum filme disponível."));
         return MovieResponse.from(movie);
     }

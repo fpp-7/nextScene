@@ -15,14 +15,21 @@ public interface MovieRepository extends JpaRepository<Movie, UUID> {
 
     Optional<Movie> findByMovieId(Integer movieId);
 
-    /** Busca em lote — evita uma consulta por filme ao montar recomendações. */
-    List<Movie> findByMovieIdIn(Collection<Integer> movieIds);
+    /**
+     * As leituras do catálogo filtram por {@code displayable} (ver V12): filmes
+     * sem tradução pt-BR ou sem elenco no TMDB não têm o que mostrar num card.
+     * <p>
+     * {@link #findByMovieId} é a exceção deliberada — um filme já na watchlist
+     * ou já avaliado precisa continuar abrindo por link direto, mesmo que tenha
+     * saído das listas.
+     */
+    List<Movie> findByGenresContainingIgnoreCaseAndDisplayableTrue(String genre, Pageable pageable);
 
-    List<Movie> findByGenresContainingIgnoreCase(String genre, Pageable pageable);
+    List<Movie> findByDisplayableTrue(Pageable pageable);
 
-    List<Movie> findByTitleContainingIgnoreCase(String title, Pageable pageable);
+    List<Movie> findByMovieIdInAndDisplayableTrue(Collection<Integer> movieIds);
 
-    Optional<Movie> findTopByOrderByRatingDesc();
+    Optional<Movie> findTopByDisplayableTrueOrderByRatingDesc();
 
     /**
      * Filmes que ainda não passaram pelo TMDB e têm tmdb_id conhecido.
@@ -56,8 +63,9 @@ public interface MovieRepository extends JpaRepository<Movie, UUID> {
      */
     @Query(value = """
             SELECT * FROM movie
-            WHERE immutable_unaccent(title) ILIKE '%' || immutable_unaccent(:term) || '%'
-               OR immutable_unaccent(COALESCE(title_pt, '')) ILIKE '%' || immutable_unaccent(:term) || '%'
+            WHERE displayable
+              AND (immutable_unaccent(title) ILIKE '%' || immutable_unaccent(:term) || '%'
+                OR immutable_unaccent(COALESCE(title_pt, '')) ILIKE '%' || immutable_unaccent(:term) || '%')
             ORDER BY GREATEST(
                          similarity(immutable_unaccent(title), immutable_unaccent(:term)),
                          similarity(immutable_unaccent(COALESCE(title_pt, '')), immutable_unaccent(:term))

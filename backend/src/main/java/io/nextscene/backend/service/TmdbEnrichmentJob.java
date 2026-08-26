@@ -1,5 +1,6 @@
 package io.nextscene.backend.service;
 
+import io.nextscene.backend.infra.MovieCacheEvictor;
 import io.nextscene.backend.model.Movie;
 import io.nextscene.backend.repository.MovieRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class TmdbEnrichmentJob {
 
     private final MovieRepository movieRepository;
     private final RestTemplate restTemplate;
+    private final MovieCacheEvictor cacheEvictor;
 
     @Value("${app.tmdb.api-key:}")
     private String tmdbApiKey;
@@ -82,6 +84,13 @@ public class TmdbEnrichmentJob {
         int ok = 0;
         for (Movie movie : pending) {
             if (enrich(movie)) ok++;
+        }
+
+        // Uma invalidação por lote, não por filme: os caches são invalidados
+        // por inteiro, então repetir a cada um dos 40 filmes só multiplicaria
+        // idas ao Redis para chegar ao mesmo estado.
+        if (ok > 0) {
+            cacheEvictor.evictCatalog();
         }
 
         log.info("🎬 TMDB: {} de {} filmes enriquecidos neste lote ({} ainda pendentes).",
@@ -157,6 +166,13 @@ public class TmdbEnrichmentJob {
 
             movie.setTrailerKey(extractTrailerKey(response));
 
+            // A consulta pediu language=pt-BR. O TMDB não erra quando não há
+            // tradução: ele devolve `title` no idioma original e `overview`
+            // vazio. A sinopse em branco é, portanto, o sinal confiável de
+            // "não existe em português" — e sem elenco o card fica com avatares
+            // vazios. Nos dois casos não há o que mostrar; ver V12.
+            movie.setDisplayable(hasText(movie.getSynopsis()) && hasText(movie.getCastList()));
+
             movie.setEnrichedAt(Instant.now());
             movieRepository.save(movie);
             return true;
@@ -171,6 +187,9 @@ public class TmdbEnrichmentJob {
             // requisições à toa.
             log.debug("TMDB não conhece '{}' (tmdb_id={}) — marcado como resolvido.",
                     movie.getTitle(), movie.getTmdbId());
+            // Sem metadados não há card possível: o TMDB é a única fonte de
+            // pôster, sinopse e elenco, e este filme não existe lá.
+            movie.setDisplayable(false);
             movie.setEnrichedAt(Instant.now());
             movieRepository.save(movie);
             return false;
@@ -182,6 +201,10 @@ public class TmdbEnrichmentJob {
                     movie.getTitle(), movie.getTmdbId(), e.getMessage());
             return false;
         }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     /**

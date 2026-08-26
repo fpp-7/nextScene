@@ -143,8 +143,14 @@ public class RecommendationService {
      */
     private RecommendationResponse buildResponse(List<MovieResponse> primary, AppUser user,
                                                  Set<Integer> alreadyRated) {
+        // O veto de gênero vale para as duas trilhas, inclusive a do motor: o
+        // motor não sabe o que o usuário excluiu, e não adianta filtrar só a
+        // prateleira por gênero se o Terror rejeitado volta pela outra.
+        Set<String> excludedGenres = excludedGenresOf(user);
+
         List<MovieResponse> firstTrack = withVariety(primary.stream()
                 .filter(m -> !alreadyRated.contains(m.id()))
+                .filter(m -> !hasExcludedGenre(m, excludedGenres))
                 .toList());
 
         Set<Integer> alreadyShown = new HashSet<>(alreadyRated);
@@ -157,9 +163,42 @@ public class RecommendationService {
                 (user == null ? List.<MovieResponse>of() : recommendByGenrePreference(user, alreadyShown))
                 .stream()
                 .filter(m -> !alreadyShown.contains(m.id()))
+                .filter(m -> !hasExcludedGenre(m, excludedGenres))
                 .toList());
 
         return new RecommendationResponse(firstTrack, byGenre);
+    }
+
+    /**
+     * Gêneros vetados pelo usuário, já traduzidos para a grafia do catálogo
+     * ("Terror" → "Horror") e em minúsculas, prontos para comparação.
+     * <p>
+     * Vazio para o cold start, que não tem usuário: ali o veto ainda não foi
+     * expresso, porque a tela de gêneros vem antes de haver conta com preferência
+     * gravada.
+     */
+    private Set<String> excludedGenresOf(AppUser user) {
+        if (user == null || user.getGenresExcluded() == null) {
+            return Set.of();
+        }
+        return user.getGenresExcluded().stream()
+                .map(MovieService::translateGenre)
+                .map(g -> g.toLowerCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /**
+     * O campo {@code genre} do DTO é a lista separada por vírgula ("Crime,
+     * Drama"), então a comparação é por item — um {@code contains} na string
+     * inteira casaria "Drama" dentro de "Docudrama".
+     */
+    private boolean hasExcludedGenre(MovieResponse movie, Set<String> excludedGenres) {
+        if (excludedGenres.isEmpty() || movie.genre() == null || movie.genre().isBlank()) {
+            return false;
+        }
+        return Arrays.stream(movie.genre().split("[,|]"))
+                .map(g -> g.trim().toLowerCase(Locale.ROOT))
+                .anyMatch(excludedGenres::contains);
     }
 
     /**
@@ -203,7 +242,7 @@ public class RecommendationService {
 
         for (String preference : preferences) {
             String genre = MovieService.translateGenre(preference);
-            for (Movie movie : movieRepository.findByGenresContainingIgnoreCase(genre, pageable)) {
+            for (Movie movie : movieRepository.findByGenresContainingIgnoreCaseAndDisplayableTrue(genre, pageable)) {
                 Integer id = movie.getMovieId();
                 if (id != null && !excluded.contains(id) && seen.add(id)) {
                     result.add(MovieResponse.from(movie));
@@ -224,7 +263,7 @@ public class RecommendationService {
     private List<MovieResponse> topRatedMovies(Set<Integer> excluded) {
         var pageable = PageRequest.of(0, RECOMMENDATION_COUNT + excluded.size(),
                 Sort.by(Sort.Direction.DESC, "rating"));
-        return movieRepository.findAll(pageable).getContent().stream()
+        return movieRepository.findByDisplayableTrue(pageable).stream()
                 .filter(m -> m.getMovieId() != null && !excluded.contains(m.getMovieId()))
                 .map(MovieResponse::from)
                 .limit(RECOMMENDATION_COUNT)
@@ -247,7 +286,7 @@ public class RecommendationService {
                 .toList();
 
         Map<Integer, Movie> catalog = new HashMap<>();
-        movieRepository.findByMovieIdIn(movieIds)
+        movieRepository.findByMovieIdInAndDisplayableTrue(movieIds)
                 .forEach(movie -> catalog.put(movie.getMovieId(), movie));
 
         List<MovieResponse> movies = new ArrayList<>();

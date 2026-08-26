@@ -236,24 +236,32 @@ export function MovieDetailsScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sinopse</Text>
-            <Text style={styles.synopsis}>{movie.synopsis}</Text>
-          </View>
+          {/* Cabeçalho sem conteúdo é pior que seção ausente: "Sinopse" seguido
+              de nada parece erro de carregamento. Filmes assim saíram das
+              listas (ver V12 no backend), mas ainda abrem por link direto —
+              de uma watchlist antiga, por exemplo. */}
+          {!!movie.synopsis?.trim() && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sinopse</Text>
+              <Text style={styles.synopsis}>{movie.synopsis}</Text>
+            </View>
+          )}
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Elenco Principal</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castList}>
-              {movie.cast.map((actor, index) => (
-                <View key={index} style={styles.castItem}>
-                  <View style={styles.castAvatar}>
-                    <Text style={styles.castInitial}>{actor.charAt(0)}</Text>
+          {movie.cast.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Elenco Principal</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castList}>
+                {movie.cast.map((actor, index) => (
+                  <View key={index} style={styles.castItem}>
+                    <View style={styles.castAvatar}>
+                      <Text style={styles.castInitial}>{actor.charAt(0)}</Text>
+                    </View>
+                    <Text style={styles.castName} numberOfLines={2}>{actor}</Text>
                   </View>
-                  <Text style={styles.castName} numberOfLines={2}>{actor}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>

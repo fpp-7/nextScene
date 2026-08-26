@@ -57,6 +57,17 @@ public class Movie {
     @Column(name = "vote_count")
     private Integer voteCount;
 
+    /**
+     * Falso quando o TMDB não conhece o filme em português ou não tem elenco
+     * cadastrado — o card viraria título estrangeiro, sinopse em branco e
+     * avatares vazios. Decidido pelo job de enriquecimento; ver V12.
+     * <p>
+     * Verdadeiro por padrão: filme ainda não enriquecido tem status
+     * desconhecido e continua visível, como sempre foi.
+     */
+    @Column(nullable = false)
+    private boolean displayable = true;
+
     /** Quando o filme foi enriquecido via TMDB. Null = pendente para o job. */
     @Column(name = "enriched_at")
     private Instant enrichedAt;

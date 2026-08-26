@@ -208,6 +208,10 @@ erDiagram
         uuid app_user_id FK
         string genres_preference
     }
+    APP_USER_GENRES_EXCLUDED {
+        uuid app_user_id FK
+        string genres_excluded "gêneros vetados no onboarding"
+    }
     MOVIE {
         uuid id PK
         int movie_id UK "id do MovieLens"
@@ -222,6 +226,7 @@ erDiagram
         double rating
         int vote_count "quantos avaliaram no TMDB"
         string trailer_key "chave do vídeo no YouTube"
+        boolean displayable "falso = sem tradução pt-BR ou sem elenco"
         timestamptz enriched_at
     }
     REFRESH_TOKEN {
@@ -308,6 +313,26 @@ A contagem da watchlist fica na própria aba dela.
 `youtube.com/watch?v={key}`. Quando é nulo, o TMDB não conhece trailer para o
 filme e **o botão de assistir some da tela**, em vez de cair numa busca por
 título, que costumava trazer review ou o filme errado.
+
+**`displayable` decide o que entra nas listas.** O catálogo vem do MovieLens,
+que é internacional: há filmes sem tradução pt-BR e sem elenco cadastrado no
+TMDB, e eles chegavam às prateleiras como um card de título estrangeiro,
+sinopse em branco e avatares vazios. O job de enriquecimento marca o veredito —
+uma consulta com `language=pt-BR` devolve `overview` vazio quando não existe
+tradução, e esse é o sinal confiável. Basta faltar um dos dois (tradução ou
+elenco) para o filme sair das listagens, da busca e do destaque.
+
+O filme continua **abrindo por link direto**: um título já na watchlist ou já
+avaliado não pode virar 404 porque a regra mudou. O padrão é `TRUE` de
+propósito — filme ainda não enriquecido tem status desconhecido e continua
+visível, senão um banco recém-criado ficaria com o catálogo vazio até o job
+alcançá-lo.
+
+**As duas listas de gênero são independentes.** `genres_preference` alimenta a
+prateleira "Para Você"; `genres_excluded` é um veto que vale para as duas
+trilhas, inclusive as vindas do motor — que não sabe o que o usuário rejeitou.
+Não gostar de Terror não é o complemento de gostar de Comédia, e um usuário
+pode não ter nenhuma das duas listas.
 
 ---
 

@@ -23,9 +23,14 @@ public record MovieResponse(
         String trailerKey
 ) {
     public static MovieResponse from(Movie movie) {
-        List<String> castList = movie.getCastList() != null
-                ? Arrays.asList(movie.getCastList().split(","))
-                : List.of();
+        // Sem o filtro de vazios, um cast_list em branco virava `[""]` — uma
+        // lista de um elemento, que a tela renderizava como um avatar sem nome.
+        List<String> castList = movie.getCastList() == null
+                ? List.of()
+                : Arrays.stream(movie.getCastList().split(","))
+                        .map(String::trim)
+                        .filter(name -> !name.isEmpty())
+                        .toList();
 
         return new MovieResponse(
                 movie.getMovieId() != null ? movie.getMovieId() : 0,
