@@ -47,14 +47,14 @@ cp .env.example .env
 Duas variáveis não têm valor padrão de propósito — a pilha **não sobe** sem elas:
 
 - `JWT_SECRET` — gere com `openssl rand -base64 48`.
-- `POSTGRES_PASSWORD` — qualquer senha sua. Tinha default `postgres` até pouco
-  tempo atrás, o que entregava o banco a quem subisse o compose num servidor.
+- `POSTGRES_PASSWORD` — qualquer senha sua. Sem default de propósito: a porta do
+  banco é publicada, e um valor previsível aqui vira porta de entrada.
 
-E uma opcional:
+E uma opcional, mas que muda bastante o resultado:
 
-- `TMDB_API_KEY` — sem ela os filmes ficam sem pôster, sinopse, elenco e
-  trailer — e, como o catálogo esconde filmes sem elenco nem tradução, as
-  prateleiras ficam bem mais magras. Pegue em
+- `TMDB_API_KEY` — sem ela os filmes ficam sem pôster, sinopse, elenco e trailer.
+  Como o catálogo esconde filmes sem sinopse em português **ou** sem elenco (veja
+  abaixo), sem a chave as prateleiras ficam quase vazias. Pegue em
   https://www.themoviedb.org/settings/api
 
 **2. Suba a pilha:**
@@ -119,6 +119,36 @@ build se um `.env` voltar a ser versionado.
 
 ---
 
+## O que o app faz que não é óbvio
+
+**O catálogo mostra menos filmes que o MovieLens.** O dataset é internacional e
+tem muita coisa que o TMDB não conhece em português. Um filme sem sinopse pt-BR
+**ou** sem elenco cadastrado vira um card de título estrangeiro, sinopse em
+branco e avatares vazios — então ele sai das listagens, da busca e do destaque.
+São ~14% do catálogo. O filme **continua abrindo por link direto**, para não
+quebrar watchlist e avaliações já feitas.
+
+Quem decide é o job de enriquecimento, não a consulta: uma chamada ao TMDB com
+`language=pt-BR` devolve `overview` vazio quando não há tradução, e esse é o
+sinal. O veredito fica em `movie.displayable`.
+
+**Excluir um gênero no onboarding vale de verdade.** O veto se aplica às duas
+trilhas de recomendação, inclusive às que vêm do motor — que não sabe o que o
+usuário rejeitou.
+
+**Trocar e-mail ou senha encerra a sessão.** O token carrega o e-mail nas claims
+e o filtro de autenticação monta o usuário a partir delas, sem ir ao banco;
+manter a sessão deixaria o token mentindo até vencer. Trocar a senha ainda exige
+a senha atual — sem isso, um token roubado (30 min de janela) viraria o
+sequestro definitivo da conta.
+
+**O catálogo é cacheado por 10 minutos.** Escrever direto no banco não aparece
+na API antes disso. O cache é invalidado quando o job de enriquecimento grava
+algo e quando a aplicação sobe — então um deploy nunca serve dados da versão
+anterior.
+
+---
+
 ## Portas
 
 | Serviço | Porta | Observação |
@@ -127,7 +157,7 @@ build se um `.env` voltar a ser versionado.
 | App (Expo Web) | 8081 | |
 | PostgreSQL | 5433 | Só em `127.0.0.1`, para o psql da sua máquina. Em produção, remova o bloco `ports` |
 | Motor | — | Sem porta pública: não tem autenticação e só o backend precisa alcançá-lo |
-| Redis | — | Sem porta pública: cache do catálogo e rate limit de login, só o backend precisa alcançá-lo |
+| Redis | — | Sem porta pública: cache do catálogo e rate limit de login/cadastro, só o backend precisa alcançá-lo |
 
 ---
 
@@ -148,8 +178,9 @@ docker compose -f docker-compose.yml -f docker-compose.full-model.yml up -d
 O override monta os artefatos por volume porque treinar sobre o ml-latest exige
 baixar 335 MB de dataset — custo que não faz sentido impor a todo build.
 
-O motor carrega ~275 MB: o SVD e o DataFrame de avaliações só entram em memória
-se o endpoint de avaliação do modelo for chamado. Veja
+O motor carrega ~275 MB. O SVD e o DataFrame de avaliações (~1 GB) só entrariam
+em memória pelo endpoint de avaliação do modelo — que este override **desliga**,
+porque roda com `ENV=production`. Nenhum caminho do app passa por ele. Veja
 [docs/project_overview.md](docs/project_overview.md#o-motor-de-recomendação).
 
 ---
@@ -178,6 +209,13 @@ docker exec nextscene-db psql -U postgres -d nextscene -c "UPDATE movie SET enri
 ```
 
 Em banco limpo isso não ocorre — a migration V10 já cuida do reprocessamento.
+
+**Fui deslogado logo depois de trocar meu e-mail.** É intencional — veja
+"O que o app faz que não é óbvio" acima. O app avisa antes de encerrar.
+
+**Alterei um filme no banco e a API não mudou.** Cache de 10 minutos. Para não
+esperar, reinicie o backend (`docker compose restart backend`): a limpeza roda
+na subida.
 
 **Container do motor reiniciando.** Verifique os logs com
 `docker compose logs recommendation-engine`. Se os modelos não estiverem no
