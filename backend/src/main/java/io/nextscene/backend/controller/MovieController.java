@@ -2,6 +2,8 @@ package io.nextscene.backend.controller;
 
 import io.nextscene.backend.dto.MovieResponse;
 import io.nextscene.backend.service.MovieService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -9,8 +11,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/movies")
+@RequestMapping("/api/v1/movies")
 @RequiredArgsConstructor
+@Tag(name = "Catálogo", description = "Filmes, busca e destaque — leitura pública, sem autenticação")
+@SecurityRequirements
 public class MovieController {
 
     private final MovieService movieService;

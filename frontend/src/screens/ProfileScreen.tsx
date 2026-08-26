@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { Settings, LogOut, ChevronRight, User, Star, Film, Bookmark } from 'lucide-react-native';
+import { Settings, LogOut, ChevronRight, User, Star, Film, ThumbsUp } from 'lucide-react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
@@ -76,11 +76,16 @@ export function ProfileScreen({ navigation }: Props) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
+                {/* "Curtidos" com o polegar, não "Favoritos" com o marcador: o
+                    marcador é o ícone da watchlist em todo o resto do app, e a
+                    contagem aqui é de curtidas. Quem via "15 Favoritos" e um
+                    filme salvo na lista achava, com razão, que o número estava
+                    errado. As três métricas são de avaliação, não de watchlist. */}
                 <View style={[styles.statIcon, { backgroundColor: 'rgba(212,160,23,0.1)' }]}>
-                  <Bookmark size={20} color={colors.primary} />
+                  <ThumbsUp size={20} color={colors.primary} />
                 </View>
                 <Text style={styles.statValue}>{stats?.favorites || 0}</Text>
-                <Text style={styles.statLabel}>Favoritos</Text>
+                <Text style={styles.statLabel}>Curtidos</Text>
               </View>
             </>
           )}

@@ -21,13 +21,16 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     /**
      * Revoga todos os tokens ativos de um usuário.
      * Usado ao sair da conta e ao detectar reuso de token já rotacionado.
+     * <p>
+     * Recebe o id, não a entidade: o logout não precisa mais carregar o
+     * {@code AppUser} do banco só para revogar tokens.
      */
     @Modifying
     @Query("""
             UPDATE RefreshToken t SET t.revokedAt = :now
-            WHERE t.user = :user AND t.revokedAt IS NULL
+            WHERE t.user.id = :userId AND t.revokedAt IS NULL
             """)
-    int revokeAllForUser(@Param("user") AppUser user, @Param("now") Instant now);
+    int revokeAllForUser(@Param("userId") UUID userId, @Param("now") Instant now);
 
     /** Remove tokens vencidos há tempo suficiente para não servirem a auditoria. */
     @Modifying

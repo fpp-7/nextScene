@@ -30,7 +30,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("com o motor fora do ar, ainda devolve recomendações")
     void fallsBackWhenEngineIsDown() throws Exception {
-        mockMvc.perform(get("/api/recommendations").header("Authorization", bearer()))
+        mockMvc.perform(get("/api/v1/recommendations").header("Authorization", bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiPicks").isArray())
                 .andExpect(jsonPath("$.byGenre").isArray())
@@ -45,12 +45,12 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
         var genres = objectMapper.writeValueAsString(Map.of("liked", List.of("Acao", "Drama")));
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .put("/api/users/me/genres")
+                        .put("/api/v1/users/me/genres")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON).content(genres))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/recommendations").header("Authorization", token))
+        mockMvc.perform(get("/api/v1/recommendations").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.aiPicks.length()").value(
                         org.hamcrest.Matchers.greaterThan(0)));
@@ -62,11 +62,11 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
         String token = bearer();
         var genres = objectMapper.writeValueAsString(Map.of("liked", List.of("Acao")));
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .put("/api/users/me/genres")
+                .put("/api/v1/users/me/genres")
                 .header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content(genres));
 
-        String response = mockMvc.perform(get("/api/recommendations").header("Authorization", token))
+        String response = mockMvc.perform(get("/api/v1/recommendations").header("Authorization", token))
                 .andReturn().getResponse().getContentAsString();
 
         var json = objectMapper.readTree(response);
@@ -102,7 +102,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
         var body = objectMapper.writeValueAsString(Map.of(
                 "ratings", List.of(Map.of("movieId", 1, "type", "dislike"))));
 
-        mockMvc.perform(post("/api/recommendations/cold-start")
+        mockMvc.perform(post("/api/v1/recommendations/cold-start")
                         .header("Authorization", bearer())
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
@@ -121,7 +121,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
 
         var genres = objectMapper.writeValueAsString(Map.of("liked", List.of("Acao", "Drama", "Crime")));
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .put("/api/users/me/genres")
+                .put("/api/v1/users/me/genres")
                 .header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content(genres));
 
@@ -134,17 +134,17 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
                 Map.of("movieId", 2959, "type", "seen"),
                 Map.of("movieId", 50, "type", "dislike")
         ));
-        mockMvc.perform(post("/api/ratings/batch")
+        mockMvc.perform(post("/api/v1/ratings/batch")
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON).content(ratings))
                 .andExpect(status().isCreated());
 
         var rated = idsOf(objectMapper.readTree(
-                mockMvc.perform(get("/api/ratings/me").header("Authorization", token))
+                mockMvc.perform(get("/api/v1/ratings/me").header("Authorization", token))
                         .andReturn().getResponse().getContentAsString()), "movieId");
 
         var body = objectMapper.readTree(
-                mockMvc.perform(get("/api/recommendations").header("Authorization", token))
+                mockMvc.perform(get("/api/v1/recommendations").header("Authorization", token))
                         .andReturn().getResponse().getContentAsString());
 
         org.assertj.core.api.Assertions.assertThat(idsOf(body.get("aiPicks"), "id"))
@@ -158,7 +158,7 @@ class RecommendationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("recomendações exigem autenticação")
     void recommendationsRequireAuth() throws Exception {
-        mockMvc.perform(get("/api/recommendations"))
+        mockMvc.perform(get("/api/v1/recommendations"))
                 .andExpect(status().isUnauthorized());
     }
 }

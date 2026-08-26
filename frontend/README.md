@@ -14,7 +14,7 @@ O NextScene utiliza inteligência artificial para recomendar filmes personalizad
 | **Cadastro** | Criação de nova conta |
 | **Onboarding — Gêneros** | Seleção de gêneros favoritos (curtir/excluir) |
 | **Onboarding — Avaliação** | Avaliação inicial de filmes para calibrar recomendações |
-| **Descobrir** | Feed principal com destaque, busca e filtro por gênero |
+| **Descobrir** | Prateleiras curadas, busca e filtro por gênero |
 | **Para Você** | Recomendações personalizadas pela IA |
 | **Watchlist** | Filmes salvos para assistir depois |
 | **Perfil** | Estatísticas do usuário e configurações |
@@ -52,8 +52,12 @@ cp .env.example .env
 ```
 
 `EXPO_PUBLIC_API_URL` precisa ser alcançável **pelo aparelho**. No navegador,
-`http://localhost:8080/api` funciona; no celular, `localhost` significa o próprio
-celular — use o IP da sua máquina na LAN.
+`http://localhost:8080/api/v1` funciona; no celular, `localhost` significa o
+próprio celular — use o IP da sua máquina na LAN.
+
+A URL termina em `/api/v1` (não `/api`): a API do backend passou a ser
+versionada, e o contrato completo fica em `http://localhost:8080/swagger-ui.html`
+enquanto o backend estiver no ar.
 
 ### Executar
 
@@ -74,8 +78,18 @@ O backend precisa estar no ar — veja o [README da raiz](../README.md).
 npm test && npm run typecheck
 ```
 
-Cobrem os serviços e o cliente HTTP. Ainda não há testes de componente: o
-`react-test-renderer` não resolve com React 19 neste projeto.
+Os testes rodam em dois projetos Jest, configurados em `jest.config.js`:
+
+| Projeto | Ambiente | Cobre |
+|---|---|---|
+| `unit` | node | Serviços, cliente HTTP, renovação de sessão, utilitários |
+| `components` | preset do Expo (mocks nativos + renderer) | Renderização de `MovieCard`, `MovieShelf`, `ErrorMessage` |
+
+Para rodar só um deles:
+
+```bash
+npx jest --selectProjects components
+```
 
 ---
 
@@ -85,12 +99,13 @@ Cobrem os serviços e o cliente HTTP. Ainda não há testes de componente: o
 src/
 ├── components/         # Componentes reutilizáveis
 │   ├── MovieCard.tsx       # Card de filme
+│   ├── MovieShelf.tsx      # Faixa horizontal de filmes (Descobrir)
 │   ├── ImageFallback.tsx   # Imagem com placeholder
 │   ├── EmptyState.tsx
 │   ├── ErrorMessage.tsx
 │   └── Loading*.tsx
 ├── contexts/           # Estado global
-│   ├── AuthContext.tsx     # Sessão, login, logout por expiração
+│   ├── AuthContext.tsx     # Sessão, login, renovação e fim de sessão
 │   └── WatchlistContext.tsx
 ├── data/
 │   └── genres.ts           # Gêneros oferecidos na interface
@@ -99,12 +114,14 @@ src/
 │   └── types.ts
 ├── screens/            # Uma por tela do app
 ├── services/           # Camada de API
-│   ├── api.ts              # Cliente axios, token, interceptor de 401
+│   ├── api.ts              # Cliente axios, tokens, renovação automática no 401
 │   ├── storage.ts          # SecureStore em nativo, localStorage na web
 │   ├── errors.ts           # Erros HTTP em linguagem de usuário
 │   └── *Service.ts         # Um por domínio
 ├── theme/
 │   └── colors.ts
+├── types/
+│   └── index.ts            # Tipos compartilhados do domínio
 └── utils/
     ├── layout.ts           # Colunas e largura de card responsivas
     └── validation.ts
@@ -130,13 +147,19 @@ O app utiliza um tema **dark** com a seguinte paleta:
 
 O app consome a API real — não há mais dados mock. Pontos que valem conhecer:
 
-**Sessão.** O token JWT fica no `SecureStore` em nativo e no `localStorage` na
-web (`services/storage.ts`). Na web ele **não fica criptografado** — é o que a
+**Sessão.** Os tokens ficam no `SecureStore` em nativo e no `localStorage` na
+web (`services/storage.ts`). Na web eles **não ficam criptografados** — é o que a
 plataforma permite sem um backend de sessão por cookie.
 
-**Expiração.** O token dura 30 minutos. Quando a API responde 401, o interceptor
-em `services/api.ts` encerra a sessão e devolve o usuário ao login, preservando
-a flag de onboarding para não repeti-lo.
+**Renovação.** O access token dura 30 minutos; o refresh, 30 dias. Quando a API
+responde 401, o interceptor em `services/api.ts` troca o refresh token por um par
+novo e repete a requisição original — o usuário não percebe nada. Requisições
+simultâneas compartilham a mesma renovação em voo, porque o refresh token é
+rotativo e vale uma única vez: duas chamadas paralelas invalidariam a sessão.
+
+**Fim da sessão.** Só quando a renovação falha — refresh expirado, revogado ou já
+consumido. Aí o interceptor encerra a sessão e devolve o usuário ao login,
+preservando a flag de onboarding para não repeti-lo.
 
 **Erros.** `services/errors.ts` traduz status HTTP e falhas de rede em mensagens
 de usuário, em vez de exibir "Request failed with status code 401".

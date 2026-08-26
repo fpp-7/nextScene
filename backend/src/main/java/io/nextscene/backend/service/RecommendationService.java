@@ -143,12 +143,14 @@ public class RecommendationService {
         Set<Integer> alreadyShown = new HashSet<>(alreadyRated);
         firstTrack.forEach(m -> alreadyShown.add(m.id()));
 
-        List<MovieResponse> byGenre =
+        // withVariety, e não um limit fixo: a trilha por gênero é ordenada por
+        // nota e sempre devolvia os mesmos dez filmes. Quem não gostava de
+        // nenhum atualizava a tela e recebia a lista idêntica de volta.
+        List<MovieResponse> byGenre = withVariety(
                 (user == null ? List.<MovieResponse>of() : recommendByGenrePreference(user, alreadyShown))
                 .stream()
                 .filter(m -> !alreadyShown.contains(m.id()))
-                .limit(RESULTS_PER_TRACK)
-                .toList();
+                .toList());
 
         return new RecommendationResponse(firstTrack, byGenre);
     }
@@ -252,7 +254,7 @@ public class RecommendationService {
             // backend, então sugere títulos que este não conhece. Antes eles eram
             // devolvidos com os dados mínimos vindos do motor, e o resultado era
             // um card sem pôster, sem nota, e que ao ser tocado levava a
-            // "Filme não encontrado" — porque GET /api/movies/{id} responde 404.
+            // "Filme não encontrado" — porque GET /api/v1/movies/{id} responde 404.
             //
             // Melhor entregar menos sugestões e todas navegáveis. Quando os
             // catálogos forem sincronizados, o descarte deixa de acontecer.

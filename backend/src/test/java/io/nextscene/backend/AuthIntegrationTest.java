@@ -22,7 +22,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
         var body = objectMapper.writeValueAsString(Map.of(
                 "name", "Felipe", "email", uniqueEmail(), "password", "senha123"));
 
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").isNotEmpty())
@@ -39,7 +39,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
 
         var body = objectMapper.writeValueAsString(Map.of("email", email, "password", "senha-errada"));
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
     }
@@ -50,7 +50,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
         var body = objectMapper.writeValueAsString(
                 Map.of("email", uniqueEmail(), "password", "seja-o-que-for"));
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("Credenciais inválidas."));
@@ -62,7 +62,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
         var body = objectMapper.writeValueAsString(Map.of(
                 "name", "Felipe", "email", uniqueEmail(), "password", "123"));
 
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
     }
@@ -78,7 +78,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("rota protegida sem token devolve 401")
     void protectedRouteRequiresToken() throws Exception {
-        mockMvc.perform(get("/api/users/me"))
+        mockMvc.perform(get("/api/v1/users/me"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -91,7 +91,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
                 "outro-segredo-completamente-diferente-com-32+", 1_800_000L)
                 .generateToken(java.util.UUID.randomUUID().toString(), "alguem@exemplo.com");
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + forged))
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + forged))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -102,7 +102,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
         // o app não deslogava e o like nunca chegava ao banco.
         var body = objectMapper.writeValueAsString(Map.of("movieId", 1, "type", "like"));
 
-        mockMvc.perform(post("/api/ratings")
+        mockMvc.perform(post("/api/v1/ratings")
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isUnauthorized());
     }
@@ -113,7 +113,7 @@ class AuthIntegrationTest extends IntegrationTestBase {
         String email = uniqueEmail();
         String token = registerAndGetToken(email);
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(email))
                 .andExpect(jsonPath("$.id").value(org.hamcrest.Matchers.matchesPattern(UUID_PATTERN)));
@@ -122,14 +122,14 @@ class AuthIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("token forjado é rejeitado")
     void forgedTokenIsRejected() throws Exception {
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer nao.e.um.token"))
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer nao.e.um.token"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("catálogo é público, mas só para leitura")
     void catalogIsPublicForReadsOnly() throws Exception {
-        mockMvc.perform(get("/api/movies?size=1")).andExpect(status().isOk());
-        mockMvc.perform(post("/api/watchlist/1")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/movies?size=1")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/watchlist/1")).andExpect(status().isUnauthorized());
     }
 }

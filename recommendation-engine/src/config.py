@@ -44,10 +44,20 @@ LINKS_FILE   = MOVIELENS_PATH / "links.csv"
 TMDB_API_KEY  = os.getenv("TMDB_API_KEY", "")
 TMDB_BASE_URL = os.getenv("TMDB_BASE_URL", "https://api.themoviedb.org/3")
 
-# ─── JWT ──────────────────────────────────────────────────────────────────────
-SECRET_KEY                   = os.getenv("SECRET_KEY", "change-me-in-production")
-ALGORITHM                    = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES  = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+# ─── PostgreSQL (só para o script de re-treino) ───────────────────────────────
+# A API do motor nunca toca em banco — é stateless de propósito. Só
+# scripts/export_app_ratings.py usa isto, para ler os ratings do app na hora de
+# re-treinar. Mesmos nomes de variável que o backend usa, para configurar os
+# dois com o mesmo .env em desenvolvimento.
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", 5432))
+DB_NAME = os.getenv("DB_NAME", "nextscene")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+
+# Acima do maior userId do ml-latest (200.948, conferido em 2026-08).
+# Usuários do app recebem ids inteiros a partir daqui — ver V11 no backend.
+MOVIELENS_USER_ID_OFFSET = int(os.getenv("MOVIELENS_USER_ID_OFFSET", 1_000_000))
 
 # ─── Modelo Híbrido — Pesos ───────────────────────────────────────────────────
 # Ajustados dinamicamente pelo número de ratings do usuário (ver hybrid.py)

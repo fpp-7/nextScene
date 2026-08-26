@@ -47,11 +47,15 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      # Só o necessário para os testes. O requirements.txt completo arrasta
-      # jupyter, matplotlib e afins, que não têm por que rodar no CI.
+      # requirements-dev.txt = requirements.txt + pytest. A lista manual que
+      # existia aqui antes (numpy, pandas, scikit-learn, fastapi, pydantic,
+      # pytest) não incluía scikit-surprise — e src/models/hybrid.py importa
+      # src/models/collaborative.py sem condição, que importa scikit-surprise
+      # no topo do arquivo. Qualquer teste que importe o híbrido (a maioria)
+      # falhava na coleta antes mesmo de rodar.
       - name: Instalar dependências
         working-directory: recommendation-engine
-        run: pip install "numpy<2" pandas scikit-learn fastapi pydantic pytest
+        run: pip install -r requirements-dev.txt
 
       - name: Testes
         working-directory: recommendation-engine

@@ -4,9 +4,11 @@ import io.nextscene.backend.dto.AuthRequest;
 import io.nextscene.backend.dto.AuthResponse;
 import io.nextscene.backend.dto.RefreshRequest;
 import io.nextscene.backend.dto.RegisterRequest;
+import io.nextscene.backend.infra.AuthenticatedUser;
 import io.nextscene.backend.infra.LoginRateLimiter;
-import io.nextscene.backend.model.AppUser;
 import io.nextscene.backend.service.AuthService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,20 +21,23 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
+@Tag(name = "Autenticação", description = "Cadastro, login, renovação e encerramento de sessão")
 public class AuthController {
 
     private final AuthService authService;
     private final LoginRateLimiter rateLimiter;
 
     @PostMapping("/register")
+    @SecurityRequirements
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")
+    @SecurityRequirements
     public ResponseEntity<AuthResponse> login(
             @Valid @RequestBody AuthRequest request,
             HttpServletRequest httpRequest
@@ -56,6 +61,7 @@ public class AuthController {
      * token vencido e não conseguiria passar pelo filtro de autenticação.
      */
     @PostMapping("/refresh")
+    @SecurityRequirements
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshRequest request) {
         return ResponseEntity.ok(authService.refresh(request.refreshToken()));
     }
@@ -69,9 +75,9 @@ public class AuthController {
      * Com 30 minutos de validade, a janela é aceitável.
      */
     @PostMapping("/logout")
-    public ResponseEntity<Map<String, String>> logout(@AuthenticationPrincipal AppUser user) {
+    public ResponseEntity<Map<String, String>> logout(@AuthenticationPrincipal AuthenticatedUser user) {
         if (user != null) {
-            authService.logout(user);
+            authService.logout(user.id());
         }
         return ResponseEntity.ok(Map.of("message", "Logout realizado com sucesso."));
     }

@@ -22,3 +22,7 @@ frontend/dist/
 # SO
 .DS_Store
 Thumbs.db
+
+# Documentação de trabalho — não necessária em produção
+docs/pendencias.md
+docs/code-review-*.md

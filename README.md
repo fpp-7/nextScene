@@ -13,11 +13,13 @@ graph LR
     BE["☕ Backend<br/>Spring Boot 4 · Java 21"]
     RE["🐍 Motor<br/>FastAPI · Python 3.11"]
     DB[("PostgreSQL 16")]
-    TMDB["TMDB<br/>(pôster, sinopse, título pt-BR)"]
+    REDIS[("Redis<br/>cache + rate limit")]
+    TMDB["TMDB<br/>(pôster, sinopse, trailer, título pt-BR)"]
 
     APP -->|"REST + JWT"| BE
     BE -->|OpenFeign| RE
     BE --- DB
+    BE --- REDIS
     BE -.->|"job em background"| TMDB
 ```
 
@@ -56,7 +58,11 @@ docker compose up -d
 
 Na primeira vez o motor baixa o MovieLens e treina os modelos dentro da imagem
 (~2 min). O backend importa o catálogo e começa a enriquecê-lo via TMDB em
-background.
+background — pôster, sinopse, nota e trailer chegam aos poucos, priorizando os
+filmes mais vistos.
+
+Com a pilha no ar, a API se documenta em **http://localhost:8080/swagger-ui.html**
+(desligue em produção com `SWAGGER_UI_ENABLED=false`).
 
 **3. Rode o app:**
 
@@ -65,7 +71,7 @@ cd frontend && cp .env.example .env && npm install && npm run web
 ```
 
 Para testar no celular com Expo Go, troque a URL no `frontend/.env` pelo IP da
-sua máquina na LAN (`http://192.168.x.x:8080/api`) e rode `npm start`.
+sua máquina na LAN (`http://192.168.x.x:8080/api/v1`) e rode `npm start`.
 
 ### Conta de teste
 
@@ -96,9 +102,10 @@ Os testes do app rodam em dois projetos: `unit` para serviços e utilitários, e
 `components` para renderização. Para rodar só um deles:
 `npx jest --selectProjects components`.
 
-Os testes do backend sobem um PostgreSQL real via Testcontainers — as migrations
-são de fato exercitadas, inclusive as extensões `pg_trgm` e `unaccent`. Por isso
-o Docker precisa estar rodando.
+Os testes do backend sobem um PostgreSQL **e um Redis** reais via Testcontainers
+— as migrations são de fato exercitadas, inclusive as extensões `pg_trgm` e
+`unaccent`, e o cache/rate limit rodam contra um Redis de verdade. Por isso o
+Docker precisa estar rodando.
 
 O CI (`.github/workflows/ci.yml`) roda os três, mais uma verificação que falha o
 build se um `.env` voltar a ser versionado.
@@ -113,6 +120,7 @@ build se um `.env` voltar a ser versionado.
 | App (Expo Web) | 8081 | |
 | PostgreSQL | 5433 | Mapeada para não conflitar com um Postgres local |
 | Motor | — | Sem porta pública: não tem autenticação e só o backend precisa alcançá-lo |
+| Redis | — | Sem porta pública: cache do catálogo e rate limit de login, só o backend precisa alcançá-lo |
 
 ---
 
@@ -152,6 +160,18 @@ aparelho. Troque pelo IP da máquina na LAN.
 em lotes, priorizando os mais bem avaliados. Leva algumas horas para o catálogo
 todo. Sem `TMDB_API_KEY`, nunca acontece.
 
+**Nenhum filme tem botão de trailer, mesmo depois do enriquecimento.** Acontece
+em bancos de desenvolvimento que já rodaram uma versão anterior do backend: o
+job marca `enriched_at` ao processar um filme e nunca o revisita, então filmes
+enriquecidos por um jar antigo — sem a lógica de trailer — ficam presos sem
+`trailer_key`. Devolva-os à fila:
+
+```bash
+docker exec nextscene-db psql -U postgres -d nextscene -c "UPDATE movie SET enriched_at = NULL WHERE vote_count IS NOT NULL AND (trailer_key IS NULL OR trailer_key = '');"
+```
+
+Em banco limpo isso não ocorre — a migration V10 já cuida do reprocessamento.
+
 **Container do motor reiniciando.** Verifique os logs com
 `docker compose logs recommendation-engine`. Se os modelos não estiverem no
 lugar, rode o pipeline de treino ou volte ao padrão (`docker compose up -d` sem
@@ -163,5 +183,8 @@ o override).
 
 - [docs/project_overview.md](docs/project_overview.md) — arquitetura, como a
   recomendação funciona, modelo de dados, endpoints e decisões de projeto
-- [docs/code-review-2026-07.md](docs/code-review-2026-07.md) — revisão técnica
-  que originou boa parte do estado atual, com o que ficou pendente
+- Contrato da API, com a pilha no ar: `http://localhost:8080/swagger-ui.html`
+
+> A revisão técnica (`docs/code-review-2026-07.md`) e o rastreamento de
+> pendências (`docs/pendencias.md`) são documentos de trabalho e ficam fora do
+> versionamento — veja o `.gitignore`.

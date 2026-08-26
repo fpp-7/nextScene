@@ -39,6 +39,8 @@ export interface Movie {
   poster: string;
   synopsis: string;
   cast: string[];
+  /** Chave do vídeo no YouTube. Ausente quando o filme não tem trailer conhecido. */
+  trailerKey?: string | null;
 }
 
 // Rating

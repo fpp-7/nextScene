@@ -60,4 +60,8 @@ public class Movie {
     /** Quando o filme foi enriquecido via TMDB. Null = pendente para o job. */
     @Column(name = "enriched_at")
     private Instant enrichedAt;
+
+    /** Chave do vídeo no YouTube (TMDB videos.results[].key). Null = sem trailer conhecido. */
+    @Column(name = "trailer_key", length = 32)
+    private String trailerKey;
 }

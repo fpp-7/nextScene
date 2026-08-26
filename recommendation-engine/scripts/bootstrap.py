@@ -43,6 +43,7 @@ REQUIRED_MODELS = (
     "feature_builder.joblib",
     "content_based.joblib",
     "collaborative.joblib",
+    "item_item.joblib",
     "hybrid_recommender.joblib",
 )
 

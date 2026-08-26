@@ -25,7 +25,7 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
                 "name", "Felipe", "email", uniqueEmail(), "password", "senha123"));
 
         var json = objectMapper.readTree(
-                mockMvc.perform(post("/api/auth/register")
+                mockMvc.perform(post("/api/v1/auth/register")
                                 .contentType(MediaType.APPLICATION_JSON).content(body))
                         .andExpect(status().isCreated())
                         .andReturn().getResponse().getContentAsString());
@@ -34,7 +34,7 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
     }
 
     private String refreshWith(String token) throws Exception {
-        return mockMvc.perform(post("/api/auth/refresh")
+        return mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("refreshToken", token))))
                 .andReturn().getResponse().getContentAsString();
@@ -58,7 +58,7 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
         String newAccess = json.get("token").asString();
 
         assertThat(newAccess).isNotBlank();
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + newAccess))
+        mockMvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + newAccess))
                 .andExpect(status().isOk());
     }
 
@@ -78,7 +78,7 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
         var session = signUp();
         refreshWith(session.refresh());
 
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("refreshToken", session.refresh()))))
@@ -97,14 +97,14 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
                 .get("refreshToken").asString();
 
         // O atacante apresenta o token antigo.
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("refreshToken", session.refresh()))))
                 .andExpect(status().isUnauthorized());
 
         // O token legítimo do dono também deixa de valer.
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("refreshToken", segundo))))
@@ -114,7 +114,7 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("token desconhecido é rejeitado")
     void unknownTokenIsRejected() throws Exception {
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("refreshToken", "token-que-nunca-existiu"))))
@@ -127,13 +127,13 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
     void logoutRevokesRefreshToken() throws Exception {
         var session = signUp();
 
-        mockMvc.perform(post("/api/auth/logout")
+        mockMvc.perform(post("/api/v1/auth/logout")
                         .header("Authorization", "Bearer " + session.access()))
                 .andExpect(status().isOk());
 
         // Regressão: antes o logout era um no-op e o aparelho continuava
         // conseguindo renovar o acesso indefinidamente.
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("refreshToken", session.refresh()))))
@@ -161,7 +161,7 @@ class RefreshTokenIntegrationTest extends IntegrationTestBase {
 
         // Sem header Authorization: é justamente quem está com o access vencido
         // que precisa chamar aqui.
-        mockMvc.perform(post("/api/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("refreshToken", session.refresh()))))

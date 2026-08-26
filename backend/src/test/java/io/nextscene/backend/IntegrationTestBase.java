@@ -9,6 +9,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
+import com.redis.testcontainers.RedisContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -40,8 +42,15 @@ public abstract class IntegrationTestBase {
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine");
 
+    /** Mesmo raciocínio do Postgres acima: cache e rate limit agora dependem
+     *  de Redis de verdade, não de um dublê em memória. */
+    @ServiceConnection
+    static final RedisContainer REDIS =
+            new RedisContainer(DockerImageName.parse("redis:7-alpine"));
+
     static {
         POSTGRES.start();
+        REDIS.start();
     }
 
     @Autowired
@@ -60,7 +69,7 @@ public abstract class IntegrationTestBase {
 
         var response = mockMvc.perform(
                         org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                                .post("/api/auth/register")
+                                .post("/api/v1/auth/register")
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                                 .content(body))
                 .andReturn().getResponse().getContentAsString();

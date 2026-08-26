@@ -12,11 +12,12 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Preenche pôster, sinopse, nota e elenco a partir do TMDB.
+ * Preenche pôster, sinopse, nota, elenco e trailer a partir do TMDB.
  * <p>
  * Antes isso acontecia dentro das requisições dos usuários: cada tela de
  * recomendação disparava até 20 chamadas HTTP sequenciais ao TMDB, somando
@@ -100,8 +101,13 @@ public class TmdbEnrichmentJob {
     @SuppressWarnings("unchecked")
     private boolean enrich(Movie movie) {
         try {
+            // include_video_language cobre o trailer original quando não há um
+            // dublado/legendado em pt-BR — sem isso, a maioria dos filmes fica
+            // sem vídeo, porque o TMDB não filtra por padrão pelo idioma da
+            // consulta.
             String url = String.format(
-                    "%s/movie/%d?append_to_response=credits&api_key=%s&language=pt-BR",
+                    "%s/movie/%d?append_to_response=credits,videos&api_key=%s"
+                            + "&language=pt-BR&include_video_language=pt-BR,en,null",
                     tmdbBaseUrl, movie.getTmdbId(), tmdbApiKey);
 
             var response = restTemplate.getForObject(url, Map.class);
@@ -149,6 +155,8 @@ public class TmdbEnrichmentJob {
                 }
             }
 
+            movie.setTrailerKey(extractTrailerKey(response));
+
             movie.setEnrichedAt(Instant.now());
             movieRepository.save(movie);
             return true;
@@ -174,5 +182,33 @@ public class TmdbEnrichmentJob {
                     movie.getTitle(), movie.getTmdbId(), e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Escolhe o trailer do YouTube entre os vídeos do filme, preferindo o
+     * oficial. Null quando não há nenhum — o app esconde o botão de play nesse
+     * caso, em vez de cair numa busca.
+     * <p>
+     * Visibilidade de pacote de propósito: é lógica pura, testada diretamente
+     * em {@code TmdbEnrichmentJobTest} sem precisar montar o resto da classe.
+     */
+    @SuppressWarnings("unchecked")
+    String extractTrailerKey(Map<String, Object> response) {
+        Map<String, Object> videos = (Map<String, Object>) response.get("videos");
+        if (videos == null) {
+            return null;
+        }
+
+        var results = (List<Map<String, Object>>) videos.get("results");
+        if (results == null) {
+            return null;
+        }
+
+        return results.stream()
+                .filter(v -> "YouTube".equals(v.get("site")) && "Trailer".equals(v.get("type")))
+                .sorted(Comparator.comparing(v -> !Boolean.TRUE.equals(v.get("official"))))
+                .findFirst()
+                .map(v -> (String) v.get("key"))
+                .orElse(null);
     }
 }

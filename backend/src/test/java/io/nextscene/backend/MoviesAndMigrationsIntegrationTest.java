@@ -80,12 +80,12 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("a paginação devolve páginas diferentes")
     void paginationReturnsDistinctPages() throws Exception {
-        String first = mockMvc.perform(get("/api/movies?page=0&size=5"))
+        String first = mockMvc.perform(get("/api/v1/movies?page=0&size=5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(5))
                 .andReturn().getResponse().getContentAsString();
 
-        String second = mockMvc.perform(get("/api/movies?page=1&size=5"))
+        String second = mockMvc.perform(get("/api/v1/movies?page=1&size=5"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -97,7 +97,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("o tamanho de página é limitado")
     void pageSizeIsCapped() throws Exception {
-        mockMvc.perform(get("/api/movies?page=0&size=5000"))
+        mockMvc.perform(get("/api/v1/movies?page=0&size=5000"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(
                         org.hamcrest.Matchers.lessThanOrEqualTo(50)));
@@ -106,7 +106,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("a busca por título encontra o filme")
     void searchFindsByTitle() throws Exception {
-        mockMvc.perform(get("/api/movies/search?q=Toy Story"))
+        mockMvc.perform(get("/api/v1/movies/search?q=Toy Story"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$[0].title").value(
@@ -116,7 +116,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("a busca ignora a caixa das letras")
     void searchIsCaseInsensitive() throws Exception {
-        mockMvc.perform(get("/api/movies/search?q=jUmAnJi"))
+        mockMvc.perform(get("/api/v1/movies/search?q=jUmAnJi"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(0)));
     }
@@ -151,12 +151,12 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
         jdbcTemplate.update(
                 "UPDATE movie SET title_pt = 'O Poderoso Chefão' WHERE movie_id = 858");
 
-        mockMvc.perform(get("/api/movies/search?q=Poderoso"))
+        mockMvc.perform(get("/api/v1/movies/search?q=Poderoso"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].title").value("O Poderoso Chefão"));
 
         // Buscar pelo nome em inglês continua funcionando.
-        mockMvc.perform(get("/api/movies/search?q=Godfather"))
+        mockMvc.perform(get("/api/v1/movies/search?q=Godfather"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(
                         org.hamcrest.Matchers.greaterThan(0)));
@@ -169,12 +169,12 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
                 "UPDATE movie SET title_pt = 'O Poderoso Chefão' WHERE movie_id = 858");
 
         // Sem acento encontra o título acentuado — digitar "Chefao" é comum.
-        mockMvc.perform(get("/api/movies/search?q=Poderoso Chefao"))
+        mockMvc.perform(get("/api/v1/movies/search?q=Poderoso Chefao"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].title").value("O Poderoso Chefão"));
 
         // E com acento também.
-        mockMvc.perform(get("/api/movies/search?q=Chefão"))
+        mockMvc.perform(get("/api/v1/movies/search?q=Chefão"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].title").value("O Poderoso Chefão"));
     }
@@ -183,14 +183,14 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @DisplayName("a busca com caracteres especiais não quebra")
     void searchHandlesSpecialCharacters() throws Exception {
         // A consulta é nativa e parametrizada; entrada estranha não deve virar erro.
-        mockMvc.perform(get("/api/movies/search?q=%25%25%25")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/movies/search?q=' OR 1=1--")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/movies/search?q=%25%25%25")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/movies/search?q=' OR 1=1--")).andExpect(status().isOk());
     }
 
     @Test
     @DisplayName("o filtro por gênero traduz do português para o catálogo")
     void genreFilterTranslates() throws Exception {
-        mockMvc.perform(get("/api/movies?genre=Acao&size=5"))
+        mockMvc.perform(get("/api/v1/movies?genre=Acao&size=5"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$[0].genre").value(
@@ -205,11 +205,11 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
         jdbcTemplate.update("UPDATE movie SET vote_count = 5000 WHERE movie_id = 296");
         jdbcTemplate.update("UPDATE movie SET vote_count = 9000 WHERE movie_id = 2571");
 
-        String popular = mockMvc.perform(get("/api/movies?sort=popular&size=5"))
+        String popular = mockMvc.perform(get("/api/v1/movies?sort=popular&size=5"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        String recent = mockMvc.perform(get("/api/movies?sort=recent&size=5"))
+        String recent = mockMvc.perform(get("/api/v1/movies?sort=recent&size=5"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        String rating = mockMvc.perform(get("/api/movies?sort=rating&size=5"))
+        String rating = mockMvc.perform(get("/api/v1/movies?sort=rating&size=5"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 
         assertThat(popular).isNotEqualTo(recent);
@@ -222,7 +222,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
         jdbcTemplate.update("UPDATE movie SET vote_count = NULL");
         jdbcTemplate.update("UPDATE movie SET vote_count = 99999 WHERE movie_id = 2571");
 
-        mockMvc.perform(get("/api/movies?sort=popular&size=1"))
+        mockMvc.perform(get("/api/v1/movies?sort=popular&size=1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(2571));
     }
@@ -230,7 +230,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("mais recentes começa pelos filmes de maior ano")
     void recentStartsWithNewestYear() throws Exception {
-        String body = mockMvc.perform(get("/api/movies?sort=recent&size=5"))
+        String body = mockMvc.perform(get("/api/v1/movies?sort=recent&size=5"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
 
         var years = new java.util.ArrayList<Integer>();
@@ -243,7 +243,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("ordenação desconhecida devolve 400 com mensagem útil")
     void unknownSortIsRejected() throws Exception {
-        mockMvc.perform(get("/api/movies?sort=aleatorio"))
+        mockMvc.perform(get("/api/v1/movies?sort=aleatorio"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value(
                         org.hamcrest.Matchers.containsString("aleatorio")));
@@ -252,7 +252,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("filme inexistente devolve 404, não 400")
     void unknownMovieIsNotFound() throws Exception {
-        mockMvc.perform(get("/api/movies/99999999"))
+        mockMvc.perform(get("/api/v1/movies/99999999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error").isNotEmpty());
     }
@@ -260,7 +260,7 @@ class MoviesAndMigrationsIntegrationTest extends IntegrationTestBase {
     @Test
     @DisplayName("o filme em destaque é público e íntegro")
     void featuredMovieIsPublic() throws Exception {
-        mockMvc.perform(get("/api/movies/featured"))
+        mockMvc.perform(get("/api/v1/movies/featured"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").isNotEmpty())
                 .andExpect(jsonPath("$.id").isNumber());

@@ -16,6 +16,27 @@ from src.models.hybrid import (
 )
 
 
+class StubItemItem:
+    """
+    Dublê do ItemItemModel: devolve um catálogo fixo de recomendações, para os
+    testes verificarem que `recommend_for_history` prefere este caminho ao
+    content-based quando ele tem o que dizer.
+    """
+
+    def __init__(self, catalog_ids=(50, 60), scores=None):
+        self.catalog_ids = list(catalog_ids)
+        self.scores = scores or {mid: 1.0 - i * 0.1 for i, mid in enumerate(catalog_ids)}
+
+    def recommend(self, rated, top_n, exclude_ids=None):
+        excluded = set(exclude_ids or [])
+        rows = [
+            {"movieId": mid, "score": self.scores[mid]}
+            for mid in self.catalog_ids
+            if mid not in excluded
+        ]
+        return pd.DataFrame(rows)
+
+
 class StubContentBased:
     """
     Dublê do ContentBasedModel: devolve um catálogo fixo e registra com que
@@ -26,6 +47,14 @@ class StubContentBased:
         self.catalog_ids = list(catalog_ids)
         self.scores = scores or {mid: 1.0 - i * 0.1 for i, mid in enumerate(catalog_ids)}
         self.last_call = {}
+        # Usado pelo merge de metadados do `_recommend_item_item`.
+        self.movies = pd.DataFrame({
+            "movieId": list(catalog_ids) + [50, 60],
+            "title_clean": [f"Filme {mid}" for mid in list(catalog_ids) + [50, 60]],
+            "genres": "Drama",
+            "year": 2000,
+            "era": "contemporary",
+        })
 
     def recommend_for_user(self, liked_movie_ids, top_n, exclude_ids=None):
         self.last_call = {
@@ -146,3 +175,49 @@ def test_respects_top_n():
     result = recommender.recommend_for_history(rated=[(99, 5.0)], top_n=3)
 
     assert len(result) == 3
+
+
+# ─── Item-item: caminho preferencial quando o modelo está presente ────────────
+
+
+def test_uses_item_item_when_available():
+    """
+    Regressão do bug em que o pipeline nunca treinava o item-item: o híbrido
+    ficava sem `ii` e degradava, em silêncio, para content-based mesmo quando
+    o item-item teria o que responder.
+    """
+    cb = StubContentBased()
+    ii = StubItemItem(catalog_ids=(50, 60))
+    recommender = HybridRecommender(content_model=cb, collaborative_model=object(), item_item_model=ii)
+
+    result = recommender.recommend_for_history(rated=[(10, 5.0)], top_n=5)
+
+    assert result["source"].iloc[0] == "item_item"
+    assert set(result["movieId"]) == {50, 60}
+
+
+def test_falls_back_to_content_based_when_item_item_has_nothing_to_say():
+    cb = StubContentBased(catalog_ids=(10, 20, 30, 40))
+    ii = StubItemItem(catalog_ids=())  # vazio: histórico fora do índice do item-item
+    recommender = HybridRecommender(content_model=cb, collaborative_model=object(), item_item_model=ii)
+
+    result = recommender.recommend_for_history(rated=[(10, 5.0)], top_n=5)
+
+    assert result["source"].iloc[0] == "content_based"
+
+
+def test_without_item_item_model_falls_back_to_content_based():
+    """Compatibilidade: modelos serializados antes do item-item existir."""
+    cb = StubContentBased()
+    recommender = HybridRecommender(content_model=cb, collaborative_model=object())
+
+    result = recommender.recommend_for_history(rated=[(10, 5.0)], top_n=5)
+
+    assert result["source"].iloc[0] == "content_based"
+
+
+def test_warns_when_built_without_item_item(caplog):
+    with caplog.at_level("WARNING"):
+        HybridRecommender(content_model=StubContentBased(), collaborative_model=object())
+
+    assert any("sem item-item" in record.message for record in caplog.records)

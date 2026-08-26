@@ -44,6 +44,24 @@ def load_ratings(force_reload: bool = False) -> pd.DataFrame:
     return df
 
 
+def load_app_ratings(csv_path: Path) -> pd.DataFrame:
+    """
+    Carrega os ratings do app exportados por scripts/export_app_ratings.py e
+    devolve no mesmo shape de load_ratings() — mesmas colunas, mesmos dtypes —
+    para concatenar direto com o MovieLens em train_pipeline.py.
+
+    Sem cache em Parquet de propósito: ao contrário do MovieLens, que é
+    estático, o export muda a cada re-treino.
+    """
+    df = pd.read_csv(csv_path, dtype={
+        "userId":  np.int32,
+        "movieId": np.int32,
+        "rating":  np.float32,
+    })
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+    return df
+
+
 def load_movies(force_reload: bool = False) -> pd.DataFrame:
     """
     Carrega filmes com título limpo, ano extraído e gêneros como lista.
