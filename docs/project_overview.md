@@ -152,11 +152,16 @@ Configurável por `MIN_RATINGS_FOR_RECOMMENDATION`.
 São sinais diferentes de propósito. Nenhuma das duas devolve filme que o usuário
 já avaliou — avaliação é insumo do algoritmo, não resultado dele.
 
-**As duas passam por `withVariety`.** As quatro primeiras posições saem sempre
-(são as de maior pontuação); as seis restantes são sorteadas de um conjunto
+**As duas passam por `withVariety`.** As duas primeiras posições saem sempre
+(são as de maior pontuação); as oito restantes são sorteadas de um conjunto
 maior de candidatos. Sem isso, ambas as trilhas eram determinísticas e o botão
 de atualizar devolvia a lista idêntica — quem não gostava de nenhuma sugestão
 não tinha como pedir outras.
+
+O número de posições fixas (`GUARANTEED_TOP`) já foi 4, e o efeito era o mesmo
+problema em menor escala: quem não gostava de nenhuma das quatro melhores as
+recebia de volta a cada atualização. Com 2, o acerto mais provável continua
+garantido sem travar a maior parte da lista.
 
 ### As prateleiras da tela "Descobrir"
 
@@ -289,8 +294,15 @@ re-treino — a maioria nunca chega a ter uma. Ver
 **`avaliacao` tem três estados, e cada um vira uma nota diferente.** `LIKE` →
 5.0, `SEEN` → 2.5, `DISLIKE` → 0.0, na escala do MovieLens. O `SEEN` é o sinal
 neutro: não puxa recomendação para nenhum lado, mas tira o filme da lista de
-candidatos — "já vi, não me ofereça de novo". Hoje só o onboarding oferece esse
-botão — oferecê-lo também na tela de detalhes é uma pendência conhecida.
+candidatos — "já vi, não me ofereça de novo". Os três estados estão disponíveis
+tanto no onboarding quanto na tela de detalhes; por um tempo o `SEEN` só existia
+no onboarding, e não havia como marcar um filme como visto depois.
+
+**As três métricas do perfil são de avaliação, não de watchlist.** "Avaliados" é
+o total, "Assistidos" conta `SEEN` e "Curtidos" conta `LIKE`. A última já se
+chamou "Favoritos" e usava o ícone de marcador — o mesmo da watchlist —, o que
+fazia o número parecer errado para quem tinha um filme salvo e quinze curtidos.
+A contagem da watchlist fica na própria aba dela.
 
 **`trailer_key` guarda só a chave do YouTube**, não a URL inteira — o app monta
 `youtube.com/watch?v={key}`. Quando é nulo, o TMDB não conhece trailer para o

@@ -37,8 +37,15 @@ public class RecommendationService {
     /** Sugestões exibidas em cada trilha. */
     private static final int RESULTS_PER_TRACK = 10;
 
-    /** Quantas posições do topo saem sempre, sem sorteio (ver withVariety). */
-    private static final int GUARANTEED_TOP = 4;
+    /**
+     * Quantas posições do topo saem sempre, sem sorteio (ver withVariety).
+     * <p>
+     * Eram 4, o que deixava 6 das 10 posições rodando. Quem não gostava de
+     * nenhuma das quatro atualizava a tela e as via de volta, sempre. Com 2, o
+     * acerto mais provável continua garantido e 8 posições giram a cada
+     * atualização.
+     */
+    private static final int GUARANTEED_TOP = 2;
 
     private final RecommendationEngineClient engineClient;
     private final MovieRepository movieRepository;
