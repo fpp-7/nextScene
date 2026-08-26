@@ -161,8 +161,11 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(get("/api/v1/ratings/me").header("Authorization", token))
                 .andExpect(jsonPath("$.length()").value(3));
 
-        mockMvc.perform(get("/api/v1/users/me").header("Authorization", token))
-                .andExpect(jsonPath("$.interactionCount").value(3));
+        // A contagem sai de /stats, que conta a tabela `rating` — o contador
+        // denormalizado em app_user foi removido na V13 justamente porque só
+        // podia divergir desta.
+        mockMvc.perform(get("/api/v1/users/me/stats").header("Authorization", token))
+                .andExpect(jsonPath("$.rated").value(3));
     }
 
     @Test
@@ -181,9 +184,10 @@ class WatchlistAndRatingsIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].type").value("dislike"));
 
-        // O contador mede interações distintas: reavaliar não pode inflá-lo.
-        mockMvc.perform(get("/api/v1/users/me").header("Authorization", token))
-                .andExpect(jsonPath("$.interactionCount").value(1));
+        // A contagem é de filmes avaliados, não de avaliações: reavaliar o
+        // mesmo filme não pode inflá-la.
+        mockMvc.perform(get("/api/v1/users/me/stats").header("Authorization", token))
+                .andExpect(jsonPath("$.rated").value(1));
     }
 
     @Test

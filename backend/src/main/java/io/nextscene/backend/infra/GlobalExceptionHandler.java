@@ -3,6 +3,7 @@ package io.nextscene.backend.infra;
 import io.nextscene.backend.service.AuthService.InvalidCredentialsException;
 import io.nextscene.backend.service.MovieService.MovieNotFoundException;
 import io.nextscene.backend.service.RefreshTokenService.InvalidRefreshTokenException;
+import io.nextscene.backend.service.UserService.InvalidCurrentPasswordException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +46,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleNoResource(NoResourceFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Map.of("error", "Recurso não encontrado: " + ex.getResourcePath()));
+    }
+
+    /** Senha atual errada numa troca de senha é 401, não 400. */
+    @ExceptionHandler(InvalidCurrentPasswordException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidCurrentPassword(InvalidCurrentPasswordException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", ex.getMessage()));
     }
 
     /** Refresh token inválido é 401: o cliente precisa refazer o login. */

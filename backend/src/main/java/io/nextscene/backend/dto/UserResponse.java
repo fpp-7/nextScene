@@ -17,7 +17,7 @@ public record UserResponse(
         String name,
         String email,
         List<String> genresPreference,
-        int interactionCount
+        List<String> genresExcluded
 ) {
     public static UserResponse from(AppUser user) {
         return new UserResponse(
@@ -32,7 +32,9 @@ public record UserResponse(
                 user.getGenresPreference() == null
                         ? List.of()
                         : List.copyOf(user.getGenresPreference()),
-                user.getInteractionCount()
+                user.getGenresExcluded() == null
+                        ? List.of()
+                        : List.copyOf(user.getGenresExcluded())
         );
     }
 }

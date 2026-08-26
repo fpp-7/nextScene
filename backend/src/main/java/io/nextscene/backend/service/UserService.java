@@ -51,7 +51,17 @@ public class UserService {
             }
             user.setEmail(request.email());
         }
-        if (request.password() != null && !request.password().isBlank()) {
+        boolean passwordChanged = request.password() != null && !request.password().isBlank();
+        if (passwordChanged) {
+            // Exigir a senha atual transforma um access token roubado (30 min de
+            // janela) num acesso temporário, e não no sequestro definitivo da
+            // conta: sem a senha, o atacante não consegue trocá-la e expulsar o
+            // dono. É o mesmo motivo pelo qual bancos pedem a senha de novo
+            // numa transferência, mesmo com a sessão aberta.
+            if (request.currentPassword() == null
+                    || !passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+                throw new InvalidCurrentPasswordException();
+            }
             user.setPasswordHash(passwordEncoder.encode(request.password()));
         }
 
@@ -60,10 +70,13 @@ public class UserService {
         // O access token carrega o e-mail nas claims, e o JwtAuthFilter monta o
         // principal a partir delas sem consultar o banco. Trocar o e-mail sem
         // encerrar a sessão deixaria o principal mentindo até o token vencer.
-        // Revogar os refresh tokens força um login novo, com claims corretas —
-        // e é o mesmo comportamento que uma troca de senha merece.
-        if (emailChanged) {
-            log.info("E-mail do usuário {} alterado — revogando as sessões ativas.", userId);
+        // Revogar os refresh tokens força um login novo, com claims corretas.
+        //
+        // A troca de senha revoga pelo mesmo motivo, mais um: trocar a senha é
+        // a reação de quem desconfia que a conta foi acessada, e ela precisa
+        // derrubar as outras sessões para valer de alguma coisa.
+        if (emailChanged || passwordChanged) {
+            log.info("Credenciais do usuário {} alteradas — revogando as sessões ativas.", userId);
             refreshTokenService.revokeAll(userId);
         }
 
@@ -89,6 +102,16 @@ public class UserService {
      * As duas listas são substituídas por inteiro, não mescladas: a tela envia
      * sempre o estado completo, e mesclar impediria de desfazer uma exclusão.
      */
+    /**
+     * Senha atual ausente ou errada numa troca de senha. É 401, não 400: o
+     * problema é credencial, não formato do payload.
+     */
+    public static class InvalidCurrentPasswordException extends RuntimeException {
+        public InvalidCurrentPasswordException() {
+            super("Senha atual incorreta.");
+        }
+    }
+
     @Transactional
     public void updateGenres(UUID userId, GenrePreferenceRequest request) {
         AppUser user = findById(userId);

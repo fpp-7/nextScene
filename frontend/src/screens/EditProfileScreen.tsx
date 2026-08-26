@@ -14,7 +14,7 @@ import { LoadingSpinner } from '../components/LoadingSpinner';
 type Props = NativeStackScreenProps<RootStackParamList, 'EditProfile'>;
 
 export function EditProfileScreen({ navigation }: Props) {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
@@ -37,9 +37,28 @@ export function EditProfileScreen({ navigation }: Props) {
 
     if (nErr || eErr) return;
 
+    // Precisa ser lido antes da chamada: `user` é atualizado logo em seguida.
+    const emailChanged = email.trim().toLowerCase() !== (user?.email ?? '').toLowerCase();
+
     setIsSaving(true);
     try {
       const updatedUser = await userService.updateProfile({ name, email });
+
+      // O backend revoga os refresh tokens quando o e-mail muda — o token de
+      // acesso atual ainda vale por até 30 minutos, mas a renovação já não. Sem
+      // este ramo, o app seguia normalmente e derrubava o usuário no login meia
+      // hora depois, sem relação visível com o que ele fez. Encerrar aqui, com
+      // o motivo na tela, é honesto: o efeito fica junto da causa.
+      if (emailChanged) {
+        Alert.alert(
+          'E-mail alterado',
+          'Por segurança, sua sessão foi encerrada. Entre novamente com o novo e-mail.',
+          [{ text: 'Entendi', onPress: () => { logout(); } }],
+          { cancelable: false }
+        );
+        return;
+      }
+
       updateUser(updatedUser);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 2000);

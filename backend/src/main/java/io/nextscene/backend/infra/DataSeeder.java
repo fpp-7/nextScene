@@ -27,7 +27,6 @@ public class DataSeeder implements CommandLineRunner {
             user.setEmail("teste@nextscene.com");
             user.setPasswordHash(passwordEncoder.encode("123456"));
             user.setGenresPreference(List.of("Acao", "Ficcao Cientifica", "Drama", "Suspense"));
-            user.setInteractionCount(0);
             userRepository.save(user);
             log.info("✅ Usuário de teste criado: teste@nextscene.com / 123456");
         } else {

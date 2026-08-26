@@ -13,9 +13,11 @@
       "backgroundColor": "#0a0a0a"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "io.nextscene.app"
     },
     "android": {
+      "package": "io.nextscene.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0a"

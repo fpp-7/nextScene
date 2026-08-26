@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,9 +30,35 @@ public class AuthController {
     private final AuthService authService;
     private final LoginRateLimiter rateLimiter;
 
+    /** Cadastros por IP na mesma janela do rate limit de login. */
+    @Value("${app.security.register.max-attempts:50}")
+    private int maxRegistrations;
+
+    /**
+     * Cadastro, limitado por IP com o mesmo contador do login.
+     * <p>
+     * Sem isso, criar contas em massa era gratuito — e cada conta nova é uma
+     * linha no banco que alimenta o re-treino do motor. O limite é o mesmo do
+     * login: quem cria mais de 10 contas em 15 minutos do mesmo IP não é um
+     * usuário — mas o teto é bem mais alto que o do login e configurável, porque
+     * atrás de CGNAT ou da saída de uma empresa muita gente legítima divide o
+     * mesmo IP, e barrar um cadastro real é pior que o abuso que se quer conter.
+     * <p>
+     * A chave é prefixada para não compartilhar o contador com o login: senão
+     * um cadastro consumiria tentativas de quem só está tentando entrar.
+     */
     @PostMapping("/register")
     @SecurityRequirements
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<AuthResponse> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        if (!rateLimiter.tryConsume("register:" + clientKey(httpRequest), maxRegistrations)) {
+            throw new ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "Muitas tentativas de cadastro. Tente novamente mais tarde.");
+        }
+
         AuthResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

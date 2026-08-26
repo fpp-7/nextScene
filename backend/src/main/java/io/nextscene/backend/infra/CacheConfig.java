@@ -44,7 +44,7 @@ import java.util.List;
 @EnableCaching
 public class CacheConfig implements CachingConfigurer {
 
-    private static final String KEY_PREFIX = "nextscene:cache:";
+    private static final String KEY_PREFIX = MovieCacheEvictor.KEY_PREFIX;
     private static final Duration TTL = Duration.ofMinutes(10);
 
     @Bean
@@ -69,7 +69,11 @@ public class CacheConfig implements CachingConfigurer {
     private RedisCacheConfiguration cacheConfig(JacksonJsonRedisSerializer<?> valueSerializer) {
         return RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(TTL)
-                .computePrefixWith(cacheName -> KEY_PREFIX + cacheName + "::")
+                // prefixCacheNameWith é a API própria para prefixo fixo; o
+                // computePrefixWith com lambda que existia aqui produzia as
+                // mesmas chaves. Trocado por ser mais direto — não foi o que
+                // resolveu a invalidação (ver MovieCacheEvictor).
+                .prefixCacheNameWith(KEY_PREFIX)
                 .serializeKeysWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair

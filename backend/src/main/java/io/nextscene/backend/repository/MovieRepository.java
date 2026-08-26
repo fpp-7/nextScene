@@ -32,6 +32,22 @@ public interface MovieRepository extends JpaRepository<Movie, UUID> {
     Optional<Movie> findTopByDisplayableTrueOrderByRatingDesc();
 
     /**
+     * Melhor nota <b>entre os filmes que muita gente avaliou</b>.
+     * <p>
+     * Sem o piso, o destaque era literalmente o maior {@code rating} do
+     * catálogo — e nota média mede qualidade percebida, não alcance. O topo
+     * ficava com compilações e obscuridades de 174 votos, enquanto clássicos
+     * com 30 mil votos e nota parecida nunca apareciam. É o mesmo raciocínio
+     * que separou {@code SortBy.POPULAR} de {@code SortBy.RATING}.
+     */
+    @Query("""
+            SELECT m FROM Movie m
+            WHERE m.displayable = TRUE AND m.voteCount >= :minVotes
+            ORDER BY m.rating DESC NULLS LAST
+            """)
+    List<Movie> findFeaturedCandidates(@Param("minVotes") int minVotes, Pageable pageable);
+
+    /**
      * Filmes que ainda não passaram pelo TMDB e têm tmdb_id conhecido.
      * Usado pelo job de enriquecimento em background.
      * <p>

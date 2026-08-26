@@ -202,7 +202,6 @@ erDiagram
         string name
         string email UK
         string password_hash
-        int interaction_count
     }
     APP_USER_GENRES_PREFERENCE {
         uuid app_user_id FK
@@ -327,6 +326,12 @@ avaliado não pode virar 404 porque a regra mudou. O padrão é `TRUE` de
 propósito — filme ainda não enriquecido tem status desconhecido e continua
 visível, senão um banco recém-criado ficaria com o catálogo vazio até o job
 alcançá-lo.
+
+**Não existe contador de interações.** Havia um `interaction_count` em
+`app_user`, incrementado a cada avaliação nova. `GET /users/me/stats` já
+responde a mesma pergunta contando a tabela `rating` — a fonte da verdade —, e
+manter os dois era guardar um número que só podia divergir: remover uma
+avaliação decrementava a contagem real e não o contador. Removido na V13.
 
 **As duas listas de gênero são independentes.** `genres_preference` alimenta a
 prateleira "Para Você"; `genres_excluded` é um veto que vale para as duas

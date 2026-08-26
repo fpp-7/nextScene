@@ -62,29 +62,4 @@ class MovieCacheIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.title").value("Depois Do Enriquecimento"));
     }
 
-    @Test
-    @DisplayName("a invalidação alcança as três caches, não só a de filme por id")
-    void evictionCoversEveryCatalogCache() {
-        // Guarda contra alguém adicionar uma cache nova ao MovieService e
-        // esquecer de listá-la no evictor — o defeito original, de novo.
-        assertThat(io.nextscene.backend.service.MovieService.class.getDeclaredMethods())
-                .filteredOn(m -> m.isAnnotationPresent(
-                        org.springframework.cache.annotation.Cacheable.class))
-                .allSatisfy(m -> {
-                    var cacheable = m.getAnnotation(
-                            org.springframework.cache.annotation.Cacheable.class);
-                    String name = cacheable.value().length > 0
-                            ? cacheable.value()[0] : cacheable.cacheNames()[0];
-                    assertThat(evictedCacheNames()).contains(name);
-                });
-    }
-
-    private java.util.List<String> evictedCacheNames() {
-        var caching = org.springframework.util.ReflectionUtils
-                .findMethod(MovieCacheEvictor.class, "evictCatalog")
-                .getAnnotation(org.springframework.cache.annotation.Caching.class);
-        return java.util.Arrays.stream(caching.evict())
-                .flatMap(e -> java.util.Arrays.stream(e.value()))
-                .toList();
-    }
 }

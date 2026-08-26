@@ -109,10 +109,28 @@ public class MovieService {
         return MovieResponse.from(findEntityByMovieId(movieId));
     }
 
+    /**
+     * Quantos votos no TMDB um filme precisa ter para poder ser o destaque.
+     * <p>
+     * 1.000 é baixo o bastante para deixar milhares de filmes elegíveis e alto
+     * o bastante para excluir a cauda longa, onde uma dúzia de votos entusiastas
+     * produz nota 9,0.
+     */
+    private static final int MIN_VOTES_FOR_FEATURED = 1_000;
+
     @Cacheable("featuredMovie")
     public MovieResponse getFeaturedMovie() {
-        Movie movie = movieRepository.findTopByDisplayableTrueOrderByRatingDesc()
-                .orElseThrow(() -> new IllegalArgumentException("Nenhum filme disponível."));
+        var candidates = movieRepository.findFeaturedCandidates(
+                MIN_VOTES_FOR_FEATURED, PageRequest.of(0, 1));
+
+        // Fallback sem piso: num banco recém-criado nada foi enriquecido ainda,
+        // então vote_count é nulo em todo o catálogo e a consulta acima volta
+        // vazia. Melhor um destaque imperfeito que uma tela de erro.
+        Movie movie = candidates.isEmpty()
+                ? movieRepository.findTopByDisplayableTrueOrderByRatingDesc()
+                        .orElseThrow(() -> new IllegalArgumentException("Nenhum filme disponível."))
+                : candidates.get(0);
+
         return MovieResponse.from(movie);
     }
 

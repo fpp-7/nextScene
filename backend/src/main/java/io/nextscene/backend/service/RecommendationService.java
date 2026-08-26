@@ -252,14 +252,6 @@ public class RecommendationService {
         return result.isEmpty() ? topRatedMovies(excluded) : result;
     }
 
-    /**
-     * O motor devolve gêneros separados por barra ("Crime|Drama"); o catálogo
-     * local usa vírgula. Sem normalizar, a mesma tela mostrava os dois formatos.
-     */
-    private String normalizeGenres(String genres) {
-        return genres == null ? "" : genres.replace("|", ", ");
-    }
-
     private List<MovieResponse> topRatedMovies(Set<Integer> excluded) {
         var pageable = PageRequest.of(0, RECOMMENDATION_COUNT + excluded.size(),
                 Sort.by(Sort.Direction.DESC, "rating"));
